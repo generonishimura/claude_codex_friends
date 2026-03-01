@@ -45,26 +45,26 @@ describe('buildInitialPrompt', () => {
 })
 
 describe('buildFixPrompt', () => {
-  it('タスク、コード、レビューを含むプロンプトを生成する', () => {
+  it('タスク、コードファイルパス、レビューを含むプロンプトを生成する', () => {
     const result = buildFixPrompt(
       'FizzBuzzを実装して',
-      'function fizzbuzz() {}',
+      '/tmp/ccf/code.ts',
       'エッジケースの処理が不足しています'
     )
     expect(result).toContain('FizzBuzz')
-    expect(result).toContain('function fizzbuzz() {}')
+    expect(result).toContain('/tmp/ccf/code.ts')
     expect(result).toContain('エッジケースの処理が不足しています')
   })
 })
 
 describe('buildReviewPrompt', () => {
-  it('タスクとコードを含むレビュープロンプトを生成する', () => {
+  it('タスクとコードファイルパスを含むレビュープロンプトを生成する', () => {
     const result = buildReviewPrompt(
       'FizzBuzzを実装して',
-      'function fizzbuzz() { return 1 }'
+      '/tmp/ccf/code.ts'
     )
     expect(result).toContain('FizzBuzz')
-    expect(result).toContain('function fizzbuzz() { return 1 }')
+    expect(result).toContain('/tmp/ccf/code.ts')
     expect(result).toContain('APPROVED')
   })
 })
@@ -180,8 +180,24 @@ function longFunction() {
     expect(code).toContain('function longFunction')
   })
 
-  it('コードブロックがない場合はnullを返す', () => {
-    const response = 'コードブロックがないテキストです。'
+  it('Claude Codeの⏺マーカーからコードを抽出できる', () => {
+    const response = `⏺ for (let i = 1; i <= 20; i++) {
+    if (i % 15 === 0) console.log("FizzBuzz");
+    else if (i % 3 === 0) console.log("Fizz");
+    else if (i % 5 === 0) console.log("Buzz");
+    else console.log(i);
+  }
+────────────────────`
+    const code = extractCodeFromResponse(response)
+    expect(code).toContain('for (let i = 1')
+    expect(code).toContain('FizzBuzz')
+    expect(code).not.toContain('─')
+  })
+
+  it('プロンプトや装飾行のみの場合はnullを返す', () => {
+    const response = `❯
+────────────────────
+  ? for shortcuts`
     expect(extractCodeFromResponse(response)).toBeNull()
   })
 

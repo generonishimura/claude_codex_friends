@@ -21,6 +21,7 @@ import {
   sendPrompt,
   capturePane,
   waitForCompletion,
+  saveCodeToTempFile,
 } from '../services/tmux.service.js'
 import {
   printBanner,
@@ -81,12 +82,16 @@ export async function runAgentLoop(
     return err(codexStart.error)
   }
 
-  // CLIの起動完了を待つ
+  // CLIの起動完了を待つ（起動に15秒程度かかる場合がある）
+  const CLI_STARTUP_DELAY_MS = 15000
+
   console.log('Claude CLI の起動を待機中...')
   const claudeReady = await waitForCompletion(
     claudeTarget,
     config.timeoutMs,
     config.pollIntervalMs,
+    '',
+    CLI_STARTUP_DELAY_MS,
   )
   if (!claudeReady.ok) {
     printError(`Claude CLI の起動に失敗: ${claudeReady.error.message}`)
@@ -99,6 +104,9 @@ export async function runAgentLoop(
     codexTarget,
     config.timeoutMs,
     config.pollIntervalMs,
+    '',
+    CLI_STARTUP_DELAY_MS,
+    true, // autoAcceptTrust
   )
   if (!codexReady.ok) {
     printError(`Codex CLI の起動に失敗: ${codexReady.error.message}`)
@@ -109,6 +117,7 @@ export async function runAgentLoop(
   // メインループ
   const iterations: IterationResult[] = []
   let currentCode: string | null = null
+  let codeFilePath = ''
   let approved = false
   let iteration = 0
 
@@ -125,15 +134,20 @@ export async function runAgentLoop(
 
     // --- Claude にプロンプト送信 ---
     const isFirstIteration = iteration === 1
-    const prompt = isFirstIteration
-      ? buildInitialPrompt(config.task, config.language)
-      : buildFixPrompt(config.task, currentCode ?? '', iterations[iterations.length - 1]?.review ?? '')
+
+    let prompt: string
+    if (isFirstIteration) {
+      prompt = buildInitialPrompt(config.task, config.language)
+    } else {
+      const lastReview = iterations[iterations.length - 1]?.review ?? ''
+      prompt = buildFixPrompt(config.task, codeFilePath, lastReview)
+    }
 
     printPhase(isFirstIteration ? 'generate' : 'fix')
 
     // 送信前のベースライン取得
     const claudeBaseline = await capturePane(claudeTarget)
-    const claudeBaselineLen = claudeBaseline.ok ? claudeBaseline.value.length : 0
+    const claudeBaselineText = claudeBaseline.ok ? claudeBaseline.value : ''
 
     const sendClaudeResult = await sendPrompt(claudeTarget, prompt)
     if (!sendClaudeResult.ok) {
@@ -146,16 +160,15 @@ export async function runAgentLoop(
       claudeTarget,
       config.timeoutMs,
       config.pollIntervalMs,
-      claudeBaselineLen,
+      claudeBaselineText,
     )
     if (!claudeResponse.ok) {
       printError(claudeResponse.error.message)
       break
     }
 
-    // コードを抽出
-    const newOutput = claudeResponse.value.slice(claudeBaselineLen)
-    const extractedCode = extractCodeFromResponse(newOutput)
+    // コードを抽出 — capture-pane の全テキストから直接抽出
+    const extractedCode = extractCodeFromResponse(claudeResponse.value)
     if (!extractedCode) {
       printError(ERRORS.CODE_EXTRACTION_FAILED.message)
       iterations.push({ iteration, code: null, review: null, approved: false })
@@ -163,14 +176,18 @@ export async function runAgentLoop(
     }
     currentCode = extractedCode
 
+    // コードを一時ファイルに保存（CLIからファイルパスで参照可能にする）
+    const ext = config.language === 'python' ? 'py' : config.language === 'go' ? 'go' : 'ts'
+    codeFilePath = await saveCodeToTempFile(currentCode, `code_iter${iteration}.${ext}`)
+
     // --- Codex にレビュー送信 ---
     printPhase('review')
 
-    const reviewPrompt = buildReviewPrompt(config.task, currentCode)
+    const reviewPrompt = buildReviewPrompt(config.task, codeFilePath)
 
     // 送信前のベースライン取得
     const codexBaseline = await capturePane(codexTarget)
-    const codexBaselineLen = codexBaseline.ok ? codexBaseline.value.length : 0
+    const codexBaselineText = codexBaseline.ok ? codexBaseline.value : ''
 
     const sendCodexResult = await sendPrompt(codexTarget, reviewPrompt)
     if (!sendCodexResult.ok) {
@@ -183,20 +200,20 @@ export async function runAgentLoop(
       codexTarget,
       config.timeoutMs,
       config.pollIntervalMs,
-      codexBaselineLen,
+      codexBaselineText,
     )
     if (!codexResponse.ok) {
       printError(codexResponse.error.message)
       break
     }
 
-    const reviewOutput = codexResponse.value.slice(codexBaselineLen)
-    approved = checkApproved(reviewOutput)
+    // レビュー全文から承認判定
+    approved = checkApproved(codexResponse.value)
 
     iterations.push({
       iteration,
       code: currentCode,
-      review: reviewOutput,
+      review: codexResponse.value,
       approved,
     })
 

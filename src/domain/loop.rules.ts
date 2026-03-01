@@ -17,27 +17,27 @@ export function buildInitialPrompt(task: string, language?: string): string {
   ].join('\n')
 }
 
-/** レビュー指摘に基づく修正プロンプトを構築する */
+/** レビュー指摘に基づく修正プロンプト(ファイル参照版)を構築する */
 export function buildFixPrompt(
   task: string,
-  code: string,
+  codeFilePath: string,
   review: string,
 ): string {
-  return [
-    '以下のコードにレビュー指摘がありました。指摘を反映して修正してください。',
-    'コードはマークダウンのコードブロック(```)で囲んで出力してください。',
-    `\nタスク: ${task}`,
-    `\n現在のコード:\n\`\`\`\n${code}\n\`\`\``,
-    `\nレビュー指摘:\n${review}`,
-  ].join('\n')
+  const cleanReview = review.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim()
+  return `${codeFilePath} のコードにレビュー指摘がありました。指摘を反映して修正し、ファイルを更新してください。タスク: ${task} レビュー指摘: ${cleanReview}`
 }
 
-/** コードレビュープロンプトを構築する */
-export function buildReviewPrompt(task: string, code: string): string {
+/** コードレビュープロンプト(ファイル参照版)を構築する */
+export function buildReviewPrompt(task: string, codeFilePath: string): string {
+  return `${codeFilePath} のコードをレビューしてください。タスク: ${task} 問題がなければ "APPROVED" と記載してください。修正が必要な場合は具体的な改善点を記載してください。`
+}
+
+/** コードレビュープロンプト(インライン版)を構築する */
+export function buildReviewPromptInline(task: string, code: string): string {
   return [
     '以下のコードをレビューしてください。',
     `\nタスク: ${task}`,
-    `\nコード:\n\`\`\`\n${code}\n\`\`\``,
+    `\n--- CODE START ---\n${code}\n--- CODE END ---`,
     '\n問題がなければ "APPROVED" と記載してください。',
     '修正が必要な場合は具体的な改善点を記載してください。',
   ].join('\n')
@@ -59,6 +59,8 @@ export function isApproved(reviewText: string): boolean {
 /** レスポンスからコードブロックを抽出する */
 export function extractCodeFromResponse(rawOutput: string): string | null {
   const cleaned = stripAnsiCodes(rawOutput)
+
+  // 1. マークダウンコードブロックから抽出を試みる
   const codeBlockRegex = /```(?:\w*)\n([\s\S]*?)```/g
   const blocks: string[] = []
 
@@ -67,10 +69,34 @@ export function extractCodeFromResponse(rawOutput: string): string | null {
     blocks.push(match[1].trim())
   }
 
-  if (blocks.length === 0) return null
+  if (blocks.length > 0) {
+    return blocks.reduce((longest, current) =>
+      current.length > longest.length ? current : longest
+    )
+  }
 
-  // 最も長いブロックを返す
-  return blocks.reduce((longest, current) =>
-    current.length > longest.length ? current : longest
-  )
+  // 2. フォールバック: Claude Code の ⏺ マーカー以降のコードを抽出
+  const markerMatch = cleaned.match(/⏺\s*([\s\S]+?)(?:\n─|$)/)
+  if (markerMatch) {
+    const code = markerMatch[1].trim()
+    if (code.length > 0) return code
+  }
+
+  // 3. フォールバック: プロンプトと空行を除いた残りのテキストをコードとして扱う
+  const lines = cleaned.split('\n')
+  const codeLines = lines.filter(line => {
+    const trimmed = line.trim()
+    // 空行、プロンプト行、装飾行を除外
+    if (!trimmed) return false
+    if (/^[❯›>$]\s*/.test(trimmed)) return false
+    if (/^[─═╭╰│┌└├┤┬┴┼╮╯┐┘]+$/.test(trimmed)) return false
+    if (/^\?\s+for shortcuts/.test(trimmed)) return false
+    return true
+  })
+
+  if (codeLines.length > 0) {
+    return codeLines.join('\n').trim()
+  }
+
+  return null
 }

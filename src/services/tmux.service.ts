@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { writeFile, mkdir, unlink } from 'node:fs/promises'
+import { writeFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Result, DomainError } from '../domain/types.js'
@@ -11,6 +11,15 @@ import { stripAnsiCodes } from '../domain/loop.rules.js'
 const execFileAsync = promisify(execFile)
 
 const CCF_TMP_DIR = join(tmpdir(), 'ccf')
+
+/** コードを一時ファイルに保存する */
+export async function saveCodeToTempFile(code: string, filename: string): Promise<string> {
+  await mkdir(CCF_TMP_DIR, { recursive: true })
+  const filePath = join(CCF_TMP_DIR, filename)
+  await writeFile(filePath, code, 'utf-8')
+  return filePath
+}
+
 
 /** tmux コマンドを実行する */
 async function tmux(...args: string[]): Promise<Result<string>> {
@@ -65,93 +74,134 @@ export async function sessionExists(sessionName: string): Promise<boolean> {
 
 /** ペインで Claude CLI を起動する */
 export async function startClaude(target: string): Promise<Result<void>> {
-  const result = await tmux('send-keys', '-t', target, 'claude', 'Enter')
+  // unset CLAUDECODE && claude を1コマンドで送信し、シェルプロンプトの誤検知を避ける
+  const result = await tmux(
+    'send-keys', '-t', target,
+    'unset CLAUDECODE && claude', 'Enter',
+  )
   if (!result.ok) return err(ERRORS.CLI_START_FAILED('Claude', result.error.message))
   return ok(undefined)
 }
 
 /** ペインで Codex CLI を起動する */
 export async function startCodex(target: string): Promise<Result<void>> {
-  const result = await tmux('send-keys', '-t', target, 'codex', 'Enter')
+  // unset CLAUDECODE && codex を1コマンドで送信
+  const result = await tmux(
+    'send-keys', '-t', target,
+    'unset CLAUDECODE && codex', 'Enter',
+  )
   if (!result.ok) return err(ERRORS.CLI_START_FAILED('Codex', result.error.message))
   return ok(undefined)
 }
 
 /** ペインにプロンプトを送信する */
 export async function sendPrompt(target: string, text: string): Promise<Result<void>> {
-  // 長いプロンプトは一時ファイル経由で送信
-  const DIRECT_SEND_LIMIT = 200
+  // 改行をスペースに置換して1行にフラット化
+  const flattened = text.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim()
 
-  if (text.length <= DIRECT_SEND_LIMIT && !text.includes('\n')) {
-    const result = await tmux('send-keys', '-t', target, text, 'Enter')
+  // 長いテキストはチャンクに分割して送信（TUIの入力バッファ制限対策）
+  const CHUNK_SIZE = 200
+  const chunks = splitIntoChunks(flattened, CHUNK_SIZE)
+
+  for (const chunk of chunks) {
+    const result = await tmux('send-keys', '-t', target, '-l', chunk)
     if (!result.ok) return err(ERRORS.SEND_PROMPT_FAILED(result.error.message))
-    return ok(undefined)
+    // チャンク間に小さなディレイを入れてバッファを処理させる
+    await sleep(50)
   }
 
-  // load-buffer + paste-buffer パターン
-  try {
-    await mkdir(CCF_TMP_DIR, { recursive: true })
-    const tmpFile = join(CCF_TMP_DIR, `prompt-${Date.now()}.txt`)
-    await writeFile(tmpFile, text, 'utf-8')
+  // Enter を送信してコマンド実行
+  await sleep(300)
+  const enterResult = await tmux('send-keys', '-t', target, 'Enter')
+  if (!enterResult.ok) return err(ERRORS.SEND_PROMPT_FAILED(enterResult.error.message))
 
-    const loadResult = await tmux('load-buffer', tmpFile)
-    if (!loadResult.ok) return err(ERRORS.SEND_PROMPT_FAILED(loadResult.error.message))
-
-    const pasteResult = await tmux('paste-buffer', '-t', target)
-    if (!pasteResult.ok) return err(ERRORS.SEND_PROMPT_FAILED(pasteResult.error.message))
-
-    // Enter を送信
-    const enterResult = await tmux('send-keys', '-t', target, 'Enter')
-    if (!enterResult.ok) return err(ERRORS.SEND_PROMPT_FAILED(enterResult.error.message))
-
-    // 一時ファイルをクリーンアップ
-    await unlink(tmpFile).catch(() => {})
-    return ok(undefined)
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e)
-    return err(ERRORS.SEND_PROMPT_FAILED(message))
-  }
+  return ok(undefined)
 }
 
-/** ペインの出力をキャプチャする */
+function splitIntoChunks(text: string, size: number): string[] {
+  const chunks: string[] = []
+  for (let i = 0; i < text.length; i += size) {
+    chunks.push(text.slice(i, i + size))
+  }
+  return chunks
+}
+
+/** ペインの出力をキャプチャする（末尾空行を除去） */
 export async function capturePane(target: string): Promise<Result<string>> {
   // -S - で全スクロールバック取得、-p でstdoutに出力
   const result = await tmux('capture-pane', '-t', target, '-p', '-S', '-')
   if (!result.ok) return err(ERRORS.CAPTURE_FAILED(result.error.message))
-  return ok(result.value)
+  // 末尾の空行パディングを除去
+  return ok(trimTrailingEmptyLines(result.value))
 }
 
-/** CLI完了プロンプトのパターン */
+function trimTrailingEmptyLines(text: string): string {
+  return text.replace(/\n+$/, '\n')
+}
+
+/** CLI応答完了のプロンプトパターン */
 const COMPLETION_PATTERNS = [
-  /[❯>]\s*$/m,       // Claude Code / Codex のプロンプト
-  /\$\s*$/m,          // シェルプロンプト（フォールバック）
+  /❯/,                 // Claude Code の入力プロンプト
+  /›/,                 // Codex の入力プロンプト (U+203A)
 ]
 
-/** ペインの出力が完了状態かどうか判定する */
+/** ペインの出力が CLI の応答完了状態かどうか判定する */
 export function isCompletionState(paneOutput: string): boolean {
   const cleaned = stripAnsiCodes(paneOutput).trimEnd()
-  return COMPLETION_PATTERNS.some(pattern => pattern.test(cleaned))
+  // 最後の数行だけチェック（中間出力の誤検知を防ぐ）
+  const lastLines = cleaned.split('\n').slice(-5).join('\n')
+  return COMPLETION_PATTERNS.some(pattern => pattern.test(lastLines))
 }
+
+/** 信頼確認ダイアログのパターン */
+const TRUST_PROMPT_PATTERN = /Do you trust the contents/
 
 /** CLI の応答完了を待つ */
 export async function waitForCompletion(
   target: string,
   timeoutMs: number,
   pollIntervalMs: number,
-  baselineLength: number = 0,
+  baselineText: string = '',
+  initialDelayMs: number = 0,
+  autoAcceptTrust: boolean = false,
 ): Promise<Result<string, DomainError>> {
   const startTime = Date.now()
+  let trustAccepted = false
+  let lastOutput = ''
+  let stableCount = 0
+  const STABLE_THRESHOLD = 2 // 2回連続で同じなら安定と判定
 
-  // 最初の少し待ち（CLIが処理を開始するまで）
-  await sleep(Math.min(pollIntervalMs, 2000))
+  // 初回ウェイト（CLI起動等に必要な待ち時間）
+  const delay = initialDelayMs || Math.min(pollIntervalMs, 2000)
+  await sleep(delay)
 
   while (Date.now() - startTime < timeoutMs) {
     const captureResult = await capturePane(target)
     if (!captureResult.ok) return captureResult
 
     const output = captureResult.value
-    // ベースラインより出力が増えており、かつ完了状態なら終了
-    if (output.length > baselineLength && isCompletionState(output)) {
+
+    // 信頼確認ダイアログの自動応答
+    if (autoAcceptTrust && !trustAccepted && TRUST_PROMPT_PATTERN.test(output)) {
+      await tmux('send-keys', '-t', target, 'Enter')
+      trustAccepted = true
+      await sleep(pollIntervalMs)
+      continue
+    }
+
+    // 安定性チェック: 出力が2回連続で同じ＋ベースラインと異なる＋完了マーカーあり
+    if (output === lastOutput) {
+      stableCount++
+    } else {
+      stableCount = 0
+      lastOutput = output
+    }
+
+    if (
+      stableCount >= STABLE_THRESHOLD &&
+      output !== baselineText &&
+      isCompletionState(output)
+    ) {
       return ok(output)
     }
 
