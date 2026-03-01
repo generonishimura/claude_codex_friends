@@ -59,3 +59,36 @@ export function printSessionInfo(sessionName: string): void {
   console.log(`${COLORS.dim}tmux セッション: ${sessionName}`)
   console.log(`別ターミナルから監視: tmux attach-session -t ${sessionName}${COLORS.reset}\n`)
 }
+
+export function printReplBanner(): void {
+  console.log(`
+${COLORS.cyan}${COLORS.bold}=== Claude x Codex Friends — Interactive Mode ===${COLORS.reset}
+${COLORS.dim}タスクを入力すると Claude→Codex の自動レビューループが開始されます${COLORS.reset}
+${COLORS.dim}/help でコマンド一覧を表示${COLORS.reset}
+`)
+}
+
+export function printReplHelp(): void {
+  console.log(`
+${COLORS.cyan}コマンド一覧:${COLORS.reset}
+  ${COLORS.bold}<テキスト>${COLORS.reset}         タスクとしてClaude→Codexの自動ループを開始
+  ${COLORS.bold}@claude <msg>${COLORS.reset}     Claudeペインに直接テキスト送信
+  ${COLORS.bold}@codex <msg>${COLORS.reset}      Codexペインに直接テキスト送信
+  ${COLORS.bold}/status${COLORS.reset}            両ペインの現在状態を表示
+  ${COLORS.bold}/help${COLORS.reset}              このヘルプを表示
+  ${COLORS.bold}/exit${COLORS.reset}              セッション終了
+`)
+}
+
+export function printReplStatus(claudeOutput: string, codexOutput: string): void {
+  const lastLines = (text: string, n: number): string =>
+    text.split('\n').slice(-n).join('\n')
+
+  console.log(`
+${COLORS.green}${COLORS.bold}[Claude] 最新出力:${COLORS.reset}
+${COLORS.dim}${lastLines(claudeOutput, 5)}${COLORS.reset}
+
+${COLORS.yellow}${COLORS.bold}[Codex] 最新出力:${COLORS.reset}
+${COLORS.dim}${lastLines(codexOutput, 5)}${COLORS.reset}
+`)
+}

@@ -23,5 +23,9 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "bin": {
+    "claude-codex-friends": "dist/index.js",
+    "ccf": "dist/index.js"
   }
 }

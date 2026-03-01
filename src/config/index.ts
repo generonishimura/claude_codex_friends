@@ -1,26 +1,35 @@
 import type { LoopConfig } from '../domain/loop.types.js'
 
 /** デフォルト設定値 */
-const DEFAULTS = {
+export const DEFAULTS = {
   maxIterations: 5,
   timeoutMs: 5 * 60 * 1000,     // 5分
   pollIntervalMs: 3000,           // 3秒
   sessionName: 'ccf',
 } as const
 
-/** CLI引数をパースして LoopConfig を構築する */
-export function parseArgs(args: string[]): LoopConfig & { sessionName: string } {
+/** 実行モード */
+export type RunMode =
+  | { mode: 'launcher' }
+  | { mode: 'repl'; language?: string; maxIterations: number; timeoutMs: number; pollIntervalMs: number }
+  | { mode: 'auto'; config: LoopConfig & { sessionName: string } }
+
+/** CLI引数をパースして実行モードを判定する */
+export function parseMode(args: string[]): RunMode {
   const positional: string[] = []
   let language: string | undefined
   let outputPath: string | undefined
   let maxIterations: number = DEFAULTS.maxIterations
   let timeoutMs: number = DEFAULTS.timeoutMs
   let pollIntervalMs: number = DEFAULTS.pollIntervalMs
-  const sessionName = DEFAULTS.sessionName
+  let replMode = false
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     switch (arg) {
+      case '--repl':
+        replMode = true
+        break
       case '-l':
       case '--language':
         language = args[++i]
@@ -52,22 +61,41 @@ export function parseArgs(args: string[]): LoopConfig & { sessionName: string } 
     }
   }
 
-  const task = positional.join(' ')
-  if (!task) {
-    console.error('エラー: タスクの説明を指定してください。')
-    printHelp()
-    process.exit(1)
+  // --repl フラグ: REPLモード（ランチャーからの自己呼び出し）
+  if (replMode) {
+    return { mode: 'repl', language, maxIterations, timeoutMs, pollIntervalMs }
   }
 
-  return {
-    task,
-    language,
-    outputPath,
-    maxIterations,
-    timeoutMs,
-    pollIntervalMs,
-    sessionName,
+  const task = positional.join(' ')
+
+  // タスク指定なし: ランチャーモード（3ペイン起動）
+  if (!task) {
+    return { mode: 'launcher' }
   }
+
+  // タスク指定あり: 自動ループモード（既存動作）
+  return {
+    mode: 'auto',
+    config: {
+      task,
+      language,
+      outputPath,
+      maxIterations,
+      timeoutMs,
+      pollIntervalMs,
+      sessionName: DEFAULTS.sessionName,
+    },
+  }
+}
+
+/** 後方互換性のために残す（自動ループモード用） */
+export function parseArgs(args: string[]): LoopConfig & { sessionName: string } {
+  const mode = parseMode(args)
+  if (mode.mode === 'auto') return mode.config
+  // parseArgs は自動ループモード前提なので、それ以外はエラー
+  console.error('エラー: タスクの説明を指定してください。')
+  printHelp()
+  process.exit(1)
 }
 
 function printHelp(): void {
@@ -75,7 +103,8 @@ function printHelp(): void {
 Claude x Codex Friends — AI対話型コード生成・レビューツール
 
 使い方:
-  npx tsx src/index.ts "タスクの説明" [オプション]
+  ccf                              インタラクティブモード（3ペイン起動）
+  ccf "タスクの説明" [オプション]    自動ループモード
 
 オプション:
   -l, --language <lang>       プログラミング言語を指定
@@ -86,7 +115,8 @@ Claude x Codex Friends — AI対話型コード生成・レビューツール
   -h, --help                  ヘルプを表示
 
 例:
-  npx tsx src/index.ts "FizzBuzzを実装して" -l typescript -o fizzbuzz.ts
-  npx tsx src/index.ts "Quick sort in Python" -m 3 -o sort.py
+  ccf                                              # 3ペインREPLモード
+  ccf "FizzBuzzを実装して" -l typescript -o fizzbuzz.ts
+  ccf "Quick sort in Python" -m 3 -o sort.py
 `.trim())
 }

@@ -59,6 +59,31 @@ export async function createSession(sessionName: string): Promise<Result<void>> 
   return ok(undefined)
 }
 
+/** tmux セッションを作成する（3ペイン構成: 上段=orchestrator, 下左=Claude, 下右=Codex） */
+export async function createThreePaneSession(sessionName: string): Promise<Result<void>> {
+  // セッション作成（pane 0: orchestrator）
+  const result = await tmux('new-session', '-d', '-s', sessionName, '-x', '200', '-y', '50')
+  if (!result.ok) return err(ERRORS.SESSION_CREATE_FAILED(result.error.message))
+
+  // 上下分割（下段 pane 1）
+  const vSplit = await tmux('split-window', '-v', '-t', `${sessionName}:0`)
+  if (!vSplit.ok) return err(ERRORS.SESSION_CREATE_FAILED(vSplit.error.message))
+
+  // 下段を左右分割（pane 2）
+  const hSplit = await tmux('split-window', '-h', '-t', `${sessionName}:0.1`)
+  if (!hSplit.ok) return err(ERRORS.SESSION_CREATE_FAILED(hSplit.error.message))
+
+  // 上段（orchestrator）のサイズを30%に調整
+  await tmux('resize-pane', '-t', `${sessionName}:0.0`, '-y', '30%')
+
+  // ペインタイトル設定
+  await tmux('select-pane', '-t', `${sessionName}:0.0`, '-T', 'orchestrator')
+  await tmux('select-pane', '-t', `${sessionName}:0.1`, '-T', 'claude')
+  await tmux('select-pane', '-t', `${sessionName}:0.2`, '-T', 'codex')
+
+  return ok(undefined)
+}
+
 /** tmux セッションを破棄する */
 export async function destroySession(sessionName: string): Promise<Result<void>> {
   const result = await tmux('kill-session', '-t', sessionName)
