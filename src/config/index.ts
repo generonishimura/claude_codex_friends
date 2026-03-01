@@ -26,7 +26,7 @@ export const DEFAULTS = {
 export type RunMode =
   | { mode: 'launcher' }
   | { mode: 'repl'; language?: string; maxIterations: number; timeoutMs: number; pollIntervalMs: number }
-  | { mode: 'auto'; config: LoopConfig & { sessionName: string; keepSession: boolean } }
+  | { mode: 'auto'; config: LoopConfig & { sessionName: string; keepSession: boolean; logPath?: string } }
 
 /** CLI引数をパースして実行モードを判定する */
 export function parseMode(args: string[]): RunMode {
@@ -38,6 +38,7 @@ export function parseMode(args: string[]): RunMode {
   let pollIntervalMs: number = DEFAULTS.pollIntervalMs
   let replMode = false
   let keepSession = false
+  let logPath: string | undefined
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
@@ -66,6 +67,9 @@ export function parseMode(args: string[]): RunMode {
         break
       case '--keep-session':
         keepSession = true
+        break
+      case '--log':
+        logPath = args[++i]
         break
       case '-h':
       case '--help':
@@ -103,6 +107,7 @@ export function parseMode(args: string[]): RunMode {
       pollIntervalMs,
       sessionName: DEFAULTS.sessionName,
       keepSession,
+      logPath,
     },
   }
 }
@@ -132,6 +137,7 @@ Claude x Codex Friends — AI対話型コード生成・レビューツール
   -t, --timeout <seconds>     タイムアウト秒数 (デフォルト: ${DEFAULTS.timeoutMs / 1000})
   --poll-interval <ms>        ポーリング間隔 ms (デフォルト: ${DEFAULTS.pollIntervalMs})
   --keep-session              終了後もtmuxセッションを残す
+  --log <path>                イテレーション履歴をJSONファイルに保存
   -h, --help                  ヘルプを表示
 
 例:

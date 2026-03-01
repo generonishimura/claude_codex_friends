@@ -199,7 +199,7 @@ export async function runLoop(
 
 /** エージェントループを実行する（セッション作成 → CLI起動 → ループ → 結果返却） */
 export async function runAgentLoop(
-  config: LoopConfig & { sessionName: string; keepSession?: boolean }
+  config: LoopConfig & { sessionName: string; keepSession?: boolean; logPath?: string }
 ): Promise<Result<LoopResult, DomainError>> {
   printBanner()
   printConfig(config.task, config.language, config.maxIterations)
@@ -276,6 +276,23 @@ export async function runAgentLoop(
 
   // ループ実行
   const result = await runLoop(config, { claude: claudeTarget, codex: codexTarget })
+
+  // イテレーション履歴をログファイルに保存
+  if (config.logPath && result.ok) {
+    try {
+      const logData = {
+        task: config.task,
+        language: config.language,
+        timestamp: new Date().toISOString(),
+        ...result.value,
+      }
+      await writeFile(config.logPath, JSON.stringify(logData, null, 2), 'utf-8')
+      console.log(`ログを保存しました: ${config.logPath}`)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      printError(`ログ保存に失敗: ${message}`)
+    }
+  }
 
   // セッション管理
   if (config.keepSession) {
