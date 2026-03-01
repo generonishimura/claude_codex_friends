@@ -24,6 +24,7 @@ import {
   waitForCompletion,
   saveCodeToTempFile,
   cleanupTempFiles,
+  withRetry,
 } from '../services/tmux.service.js'
 import {
   printBanner,
@@ -98,12 +99,14 @@ export async function runLoop(
       break
     }
 
-    // Claude の応答を待つ
-    const claudeResponse = await waitForCompletion(
-      targets.claude,
-      config.timeoutMs,
-      config.pollIntervalMs,
-      claudeBaselineText,
+    // Claude の応答を待つ（リトライ付き）
+    const claudeResponse = await withRetry(() =>
+      waitForCompletion(
+        targets.claude,
+        config.timeoutMs,
+        config.pollIntervalMs,
+        claudeBaselineText,
+      )
     )
     if (!claudeResponse.ok) {
       printError(claudeResponse.error.message)
@@ -138,12 +141,14 @@ export async function runLoop(
       break
     }
 
-    // Codex の応答を待つ
-    const codexResponse = await waitForCompletion(
-      targets.codex,
-      config.timeoutMs,
-      config.pollIntervalMs,
-      codexBaselineText,
+    // Codex の応答を待つ（リトライ付き）
+    const codexResponse = await withRetry(() =>
+      waitForCompletion(
+        targets.codex,
+        config.timeoutMs,
+        config.pollIntervalMs,
+        codexBaselineText,
+      )
     )
     if (!codexResponse.ok) {
       printError(codexResponse.error.message)

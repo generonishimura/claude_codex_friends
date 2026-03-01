@@ -277,3 +277,20 @@ export async function waitForCompletion(
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
+
+/** Result を返す非同期関数をリトライ付きで実行する */
+export async function withRetry<T>(
+  fn: () => Promise<Result<T, DomainError>>,
+  maxRetries: number = DEFAULTS.maxRetries,
+  delayMs: number = DEFAULTS.retryDelayMs,
+): Promise<Result<T, DomainError>> {
+  let lastResult: Result<T, DomainError> | undefined
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    lastResult = await fn()
+    if (lastResult.ok) return lastResult
+    if (attempt < maxRetries) {
+      await sleep(delayMs)
+    }
+  }
+  return lastResult!
+}

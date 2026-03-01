@@ -16,6 +16,10 @@ export const DEFAULTS = {
   enterDelayMs: 300,
   /** 完了判定の安定性閾値 — 連続同一出力の回数 */
   stableThreshold: 2,
+  /** リトライ最大回数 */
+  maxRetries: 2,
+  /** リトライ間隔 (ms) */
+  retryDelayMs: 2000,
 } as const
 
 /** 実行モード */
