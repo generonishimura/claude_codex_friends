@@ -1,7 +1,5 @@
 import { execFile, spawnSync } from 'node:child_process'
 import { promisify } from 'node:util'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
 import {
   checkTmuxAvailable,
   createThreePaneSession,
@@ -17,11 +15,22 @@ const execFileAsync = promisify(execFile)
 
 const SESSION_NAME = 'ccf'
 
-/** プロジェクトルートの絶対パスを取得する */
-function getProjectRoot(): string {
-  const currentDir = dirname(fileURLToPath(import.meta.url))
-  // src/launcher.ts → プロジェクトルート、dist/launcher.js → プロジェクトルート
-  return join(currentDir, '..')
+/**
+ * REPL起動コマンドを構築する
+ * process.argv から実行中のランタイムとエントリースクリプトを取得し、
+ * 同じ方法で --repl モードを起動するコマンドを返す
+ */
+function buildReplCommand(): string {
+  // process.argv[1] は実行中のエントリースクリプトの絶対パス
+  // 例: /path/to/project/src/index.ts (tsx経由)
+  //     /path/to/project/dist/index.js (node経由・npm link)
+  const entryScript = process.argv[1]
+
+  // tsx 経由かどうかで実行コマンドを分岐
+  if (entryScript.endsWith('.ts')) {
+    return `npx tsx ${entryScript} --repl`
+  }
+  return `node ${entryScript} --repl`
 }
 
 /** 3ペインtmuxセッションを作成し、各CLIを起動してattachする */
@@ -81,8 +90,7 @@ export async function launchThreePane(): Promise<void> {
   }
 
   // Orchestrator ペイン (pane 0) で REPL モードを起動
-  const projectRoot = getProjectRoot()
-  const replCommand = `cd ${projectRoot} && npx tsx src/index.ts --repl`
+  const replCommand = buildReplCommand()
   try {
     await execFileAsync('tmux', [
       'send-keys', '-t', orchestratorTarget,
