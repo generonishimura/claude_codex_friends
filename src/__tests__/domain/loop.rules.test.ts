@@ -213,7 +213,7 @@ print("hello")
     expect(code).toBe('print("hello")')
   })
 
-  it('複数のコードブロックがある場合は最も長いものを返す', () => {
+  it('複数のコードブロックがある場合は最後のものを返す', () => {
     const response = `
 \`\`\`typescript
 const a = 1
@@ -229,6 +229,31 @@ function longFunction() {
 `
     const code = extractCodeFromResponse(response)
     expect(code).toContain('function longFunction')
+  })
+
+  it('説明文中の短いコード例より最後の完全なコードブロックを優先する', () => {
+    const response = `
+まず基本的な書き方:
+
+\`\`\`typescript
+console.log("example")
+// これは長い説明文の中のコード例です
+// たくさんの行があるように見えますが説明です
+// もっと行を追加して長く見せます
+// さらにもう一行
+\`\`\`
+
+最終的なコード:
+
+\`\`\`typescript
+function solve() {
+  return 42
+}
+\`\`\`
+`
+    const code = extractCodeFromResponse(response)
+    expect(code).toContain('function solve')
+    expect(code).not.toContain('example')
   })
 
   it('Claude Codeの⏺マーカーからコードを抽出できる', () => {

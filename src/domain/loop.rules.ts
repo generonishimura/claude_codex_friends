@@ -95,9 +95,8 @@ export function extractCodeFromResponse(rawOutput: string): string | null {
   }
 
   if (blocks.length > 0) {
-    return blocks.reduce((longest, current) =>
-      current.length > longest.length ? current : longest
-    )
+    // 最後のコードブロックを採用（LLMは最終回答を末尾に出す傾向がある）
+    return blocks[blocks.length - 1]
   }
 
   // 2. フォールバック: Claude Code の ⏺ マーカー以降のコードを抽出
