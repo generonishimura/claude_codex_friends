@@ -12,6 +12,8 @@ import {
   printReplBanner,
   printReplHelp,
   printReplStatus,
+  printReplHistory,
+  printReplLastResult,
 } from '../ui/terminal.js'
 
 interface ReplOptions {
@@ -22,12 +24,22 @@ interface ReplOptions {
   pollIntervalMs: number
 }
 
+/** 実行履歴エントリ */
+interface HistoryEntry {
+  task: string
+  approved: boolean
+  iterations: number
+  finalCode: string | null
+}
+
 /** インタラクティブREPLを起動する */
 export async function startRepl(options: ReplOptions): Promise<void> {
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
   })
+
+  const history: HistoryEntry[] = []
 
   printReplBanner()
 
@@ -48,7 +60,15 @@ export async function startRepl(options: ReplOptions): Promise<void> {
             timeoutMs: options.timeoutMs,
             pollIntervalMs: options.pollIntervalMs,
           }
-          await runLoop(config, options.targets)
+          const result = await runLoop(config, options.targets)
+          if (result.ok) {
+            history.push({
+              task: command.payload,
+              approved: result.value.approved,
+              iterations: result.value.totalIterations,
+              finalCode: result.value.finalCode,
+            })
+          }
           prompt()
           break
         }
@@ -78,6 +98,19 @@ export async function startRepl(options: ReplOptions): Promise<void> {
             claudeCapture.ok ? claudeCapture.value : 'キャプチャ失敗',
             codexCapture.ok ? codexCapture.value : 'キャプチャ失敗',
           )
+          prompt()
+          break
+        }
+
+        case 'history': {
+          printReplHistory(history)
+          prompt()
+          break
+        }
+
+        case 'last': {
+          const lastEntry = history.length > 0 ? history[history.length - 1] : null
+          printReplLastResult(lastEntry)
           prompt()
           break
         }
