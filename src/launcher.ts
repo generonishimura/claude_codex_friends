@@ -7,6 +7,7 @@ import {
   sessionExists,
   startClaude,
   startCodex,
+  waitForShellReady,
 } from './services/tmux.service.js'
 import { printError } from './ui/terminal.js'
 
@@ -35,8 +36,26 @@ export async function launchThreePane(): Promise<void> {
     process.exit(1)
   }
 
-  // Claude ペイン (pane 1) で claude CLI を起動
+  const orchestratorTarget = `${SESSION_NAME}:0.0`
   const claudeTarget = `${SESSION_NAME}:0.1`
+  const codexTarget = `${SESSION_NAME}:0.2`
+
+  // 全ペインのシェル起動完了を待つ
+  console.log('シェルの起動を待機中...')
+  const shellResults = await Promise.all([
+    waitForShellReady(orchestratorTarget),
+    waitForShellReady(claudeTarget),
+    waitForShellReady(codexTarget),
+  ])
+  for (const result of shellResults) {
+    if (!result.ok) {
+      printError(`シェルの起動に失敗: ${result.error.message}`)
+      await destroySession(SESSION_NAME)
+      process.exit(1)
+    }
+  }
+
+  // Claude ペイン (pane 1) で claude CLI を起動
   const claudeStart = await startClaude(claudeTarget)
   if (!claudeStart.ok) {
     printError(claudeStart.error.message)
@@ -45,7 +64,6 @@ export async function launchThreePane(): Promise<void> {
   }
 
   // Codex ペイン (pane 2) で codex CLI を起動
-  const codexTarget = `${SESSION_NAME}:0.2`
   const codexStart = await startCodex(codexTarget)
   if (!codexStart.ok) {
     printError(codexStart.error.message)
@@ -54,7 +72,6 @@ export async function launchThreePane(): Promise<void> {
   }
 
   // Orchestrator ペイン (pane 0) で REPL モードを起動
-  const orchestratorTarget = `${SESSION_NAME}:0.0`
   try {
     await execFileAsync('tmux', [
       'send-keys', '-t', orchestratorTarget,

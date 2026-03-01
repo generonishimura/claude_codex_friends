@@ -97,6 +97,37 @@ export async function sessionExists(sessionName: string): Promise<boolean> {
   return result.ok
 }
 
+/** シェルプロンプトのパターン（zsh/bash） */
+const SHELL_PROMPT_PATTERN = /[$%#]\s*$/
+
+/** ペインのシェルが起動完了するまで待つ */
+export async function waitForShellReady(
+  target: string,
+  timeoutMs: number = 30000,
+  pollIntervalMs: number = 500,
+): Promise<Result<void>> {
+  const startTime = Date.now()
+
+  // zshrc の読み込みに時間がかかるため初回ウェイト
+  await sleep(1000)
+
+  while (Date.now() - startTime < timeoutMs) {
+    const captureResult = await capturePane(target)
+    if (!captureResult.ok) return err(captureResult.error)
+
+    const output = stripAnsiCodes(captureResult.value).trimEnd()
+    const lastLine = output.split('\n').pop() ?? ''
+
+    if (SHELL_PROMPT_PATTERN.test(lastLine)) {
+      return ok(undefined)
+    }
+
+    await sleep(pollIntervalMs)
+  }
+
+  return err(ERRORS.TIMEOUT(target, timeoutMs))
+}
+
 /** ペインで Claude CLI を起動する */
 export async function startClaude(target: string): Promise<Result<void>> {
   // unset CLAUDECODE && claude を1コマンドで送信し、シェルプロンプトの誤検知を避ける
