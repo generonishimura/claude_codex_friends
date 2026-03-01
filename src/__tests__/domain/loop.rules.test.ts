@@ -128,6 +128,26 @@ describe('isApproved', () => {
   it('空文字列は未承認と判定する', () => {
     expect(isApproved('')).toBe(false)
   })
+
+  it('「APPROVEDではありません」は否定なので未承認と判定する', () => {
+    expect(isApproved('APPROVED ではありません。修正が必要です。')).toBe(false)
+  })
+
+  it('「APPROVEDではない」は否定なので未承認と判定する', () => {
+    expect(isApproved('APPROVEDではない。改善が必要。')).toBe(false)
+  })
+
+  it('「not approved」は否定なので未承認と判定する', () => {
+    expect(isApproved('This is not approved. Please fix the issues.')).toBe(false)
+  })
+
+  it('「NOT APPROVED」は否定なので未承認と判定する', () => {
+    expect(isApproved('NOT APPROVED - needs refactoring')).toBe(false)
+  })
+
+  it('否定文脈でない単独のAPPROVEDは承認と判定する', () => {
+    expect(isApproved('判定\nAPPROVED\n問題ありません。')).toBe(true)
+  })
 })
 
 describe('extractCodeFromResponse', () => {
