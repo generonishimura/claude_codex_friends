@@ -7,3 +7,6 @@ dist/
 !vitest.config.ts
 .env
 /tmp/
+
+# CCF一時ファイル出力（OS tmpdir配下に生成されるが念のため）
+ccf_output/
