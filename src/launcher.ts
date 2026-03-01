@@ -1,5 +1,7 @@
 import { execFile, spawnSync } from 'node:child_process'
 import { promisify } from 'node:util'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import {
   checkTmuxAvailable,
   createThreePaneSession,
@@ -14,6 +16,13 @@ import { printError } from './ui/terminal.js'
 const execFileAsync = promisify(execFile)
 
 const SESSION_NAME = 'ccf'
+
+/** プロジェクトルートの絶対パスを取得する */
+function getProjectRoot(): string {
+  const currentDir = dirname(fileURLToPath(import.meta.url))
+  // src/launcher.ts → プロジェクトルート、dist/launcher.js → プロジェクトルート
+  return join(currentDir, '..')
+}
 
 /** 3ペインtmuxセッションを作成し、各CLIを起動してattachする */
 export async function launchThreePane(): Promise<void> {
@@ -72,10 +81,12 @@ export async function launchThreePane(): Promise<void> {
   }
 
   // Orchestrator ペイン (pane 0) で REPL モードを起動
+  const projectRoot = getProjectRoot()
+  const replCommand = `cd ${projectRoot} && npx tsx src/index.ts --repl`
   try {
     await execFileAsync('tmux', [
       'send-keys', '-t', orchestratorTarget,
-      'npx tsx src/index.ts --repl', 'Enter',
+      replCommand, 'Enter',
     ])
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
