@@ -148,6 +148,37 @@ describe('isApproved', () => {
   it('否定文脈でない単独のAPPROVEDは承認と判定する', () => {
     expect(isApproved('判定\nAPPROVED\n問題ありません。')).toBe(true)
   })
+
+  it('LGTMは承認と判定する', () => {
+    expect(isApproved('LGTM! Great implementation.')).toBe(true)
+    expect(isApproved('lgtm')).toBe(true)
+  })
+
+  it('Looks good / looks good to meは承認と判定する', () => {
+    expect(isApproved('Looks good to me!')).toBe(true)
+    expect(isApproved('This looks good. Ship it.')).toBe(true)
+  })
+
+  it('Approved with suggestionsは承認と判定する（軽微な指摘付き承認）', () => {
+    expect(isApproved('Approved with minor suggestions: add a comment.')).toBe(true)
+  })
+
+  it('「承認」（日本語）は承認と判定する', () => {
+    expect(isApproved('承認します。問題ありません。')).toBe(true)
+    expect(isApproved('コードを承認します')).toBe(true)
+  })
+
+  it('「問題ありません」は承認と判定する', () => {
+    expect(isApproved('コードに問題ありません。')).toBe(true)
+  })
+
+  it('「cannot approve」は否定なので未承認と判定する', () => {
+    expect(isApproved('I cannot approve this code yet.')).toBe(false)
+  })
+
+  it('「承認できません」は否定なので未承認と判定する', () => {
+    expect(isApproved('この状態では承認できません。')).toBe(false)
+  })
 })
 
 describe('extractCodeFromResponse', () => {

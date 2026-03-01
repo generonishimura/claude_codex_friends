@@ -53,11 +53,23 @@ export function shouldContinueLoop(state: LoopState): boolean {
 
 /** 否定文脈のパターン */
 const NEGATION_PATTERNS = [
-  /not\s+approved/i,       // "not approved", "NOT APPROVED"
+  /not\s+approved/i,             // "not approved", "NOT APPROVED"
+  /cannot\s+approve/i,           // "cannot approve"
+  /can't\s+approve/i,            // "can't approve"
   /approved\s*ではありません/i,  // "APPROVED ではありません"
-  /approved\s*ではない/i,       // "APPROVEDではない"
-  /approved\s*できません/i,     // "APPROVEDできません"
-  /未\s*承認/,                  // "未承認"
+  /approved\s*ではない/i,        // "APPROVEDではない"
+  /approved\s*できません/i,      // "APPROVEDできません"
+  /承認できません/,               // "承認できません"
+  /未\s*承認/,                    // "未承認"
+]
+
+/** 承認を示すパターン */
+const APPROVAL_PATTERNS = [
+  /approved/i,                   // "APPROVED", "Approved"
+  /\blgtm\b/i,                   // "LGTM"
+  /looks\s+good/i,               // "Looks good", "looks good to me"
+  /承認/,                         // "承認します"
+  /問題ありません/,               // "問題ありません"
 ]
 
 /** レビュー結果が承認かどうか判定する */
@@ -66,7 +78,7 @@ export function isApproved(reviewText: string): boolean {
   if (NEGATION_PATTERNS.some(pattern => pattern.test(reviewText))) {
     return false
   }
-  return /approved/i.test(reviewText)
+  return APPROVAL_PATTERNS.some(pattern => pattern.test(reviewText))
 }
 
 /** レスポンスからコードブロックを抽出する */
