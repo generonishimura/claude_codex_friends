@@ -199,7 +199,7 @@ export async function runLoop(
 
 /** エージェントループを実行する（セッション作成 → CLI起動 → ループ → 結果返却） */
 export async function runAgentLoop(
-  config: LoopConfig & { sessionName: string }
+  config: LoopConfig & { sessionName: string; keepSession?: boolean }
 ): Promise<Result<LoopResult, DomainError>> {
   printBanner()
   printConfig(config.task, config.language, config.maxIterations)
@@ -277,9 +277,14 @@ export async function runAgentLoop(
   // ループ実行
   const result = await runLoop(config, { claude: claudeTarget, codex: codexTarget })
 
-  // 結果を返す（セッションは残す — ユーザーが確認できるように）
-  console.log(`\ntmux セッション "${config.sessionName}" は残しています。`)
-  console.log(`確認後、tmux kill-session -t ${config.sessionName} で削除してください。`)
+  // セッション管理
+  if (config.keepSession) {
+    console.log(`\ntmux セッション "${config.sessionName}" は残しています。`)
+    console.log(`確認後、tmux kill-session -t ${config.sessionName} で削除してください。`)
+  } else {
+    await destroySession(config.sessionName)
+    console.log(`\ntmux セッション "${config.sessionName}" を削除しました。`)
+  }
 
   return result
 }
