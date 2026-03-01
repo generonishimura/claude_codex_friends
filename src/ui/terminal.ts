@@ -75,9 +75,47 @@ ${COLORS.cyan}コマンド一覧:${COLORS.reset}
   ${COLORS.bold}@claude <msg>${COLORS.reset}     Claudeペインに直接テキスト送信
   ${COLORS.bold}@codex <msg>${COLORS.reset}      Codexペインに直接テキスト送信
   ${COLORS.bold}/status${COLORS.reset}            両ペインの現在状態を表示
+  ${COLORS.bold}/history${COLORS.reset}           実行履歴を表示
+  ${COLORS.bold}/last${COLORS.reset}              前回の実行結果を表示
   ${COLORS.bold}/help${COLORS.reset}              このヘルプを表示
   ${COLORS.bold}/exit${COLORS.reset}              セッション終了
 `)
+}
+
+export function printReplHistory(entries: Array<{ task: string; approved: boolean; iterations: number }>): void {
+  if (entries.length === 0) {
+    console.log(`${COLORS.dim}実行履歴がありません。${COLORS.reset}`)
+    return
+  }
+  console.log(`\n${COLORS.cyan}${COLORS.bold}実行履歴:${COLORS.reset}`)
+  entries.forEach((entry, i) => {
+    const status = entry.approved
+      ? `${COLORS.green}APPROVED${COLORS.reset}`
+      : `${COLORS.yellow}未承認${COLORS.reset}`
+    console.log(`  ${i + 1}. ${entry.task} [${status}] (${entry.iterations}回)`)
+  })
+  console.log()
+}
+
+export function printReplLastResult(result: { task: string; approved: boolean; iterations: number; finalCode: string | null } | null): void {
+  if (!result) {
+    console.log(`${COLORS.dim}前回の実行結果がありません。${COLORS.reset}`)
+    return
+  }
+  const status = result.approved
+    ? `${COLORS.green}APPROVED${COLORS.reset}`
+    : `${COLORS.yellow}未承認${COLORS.reset}`
+  console.log(`
+${COLORS.cyan}${COLORS.bold}前回の実行結果:${COLORS.reset}
+  タスク: ${result.task}
+  ステータス: ${status}
+  イテレーション: ${result.iterations}回
+`)
+  if (result.finalCode) {
+    console.log(`${COLORS.dim}--- コード ---${COLORS.reset}`)
+    console.log(result.finalCode)
+    console.log(`${COLORS.dim}--- ここまで ---${COLORS.reset}\n`)
+  }
 }
 
 export function printReplStatus(claudeOutput: string, codexOutput: string): void {

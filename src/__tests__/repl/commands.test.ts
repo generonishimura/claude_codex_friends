@@ -53,6 +53,16 @@ describe('parseCommand', () => {
       const result = parseCommand('  /status  ')
       expect(result).toEqual({ type: 'status' })
     })
+
+    it('/history で履歴表示コマンドと解釈する', () => {
+      const result = parseCommand('/history')
+      expect(result).toEqual({ type: 'history' })
+    })
+
+    it('/last で前回結果表示コマンドと解釈する', () => {
+      const result = parseCommand('/last')
+      expect(result).toEqual({ type: 'last' })
+    })
   })
 
   describe('空入力', () => {

@@ -6,8 +6,20 @@ export function stripAnsiCodes(text: string): string {
   return text.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
 }
 
+/** プレースホルダを値で置換する */
+function applyTemplate(template: string, vars: Record<string, string>): string {
+  let result = template
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value)
+  }
+  return result
+}
+
 /** 初回コード生成プロンプトを構築する */
-export function buildInitialPrompt(task: string, language?: string): string {
+export function buildInitialPrompt(task: string, language?: string, customTemplate?: string): string {
+  if (customTemplate) {
+    return applyTemplate(customTemplate, { task, language: language ?? '' })
+  }
   const langPart = language ? `\n言語: ${language}` : ''
   return [
     '以下のタスクに対してコードを生成してください。',
@@ -22,13 +34,20 @@ export function buildFixPrompt(
   task: string,
   codeFilePath: string,
   review: string,
+  customTemplate?: string,
 ): string {
   const cleanReview = review.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim()
+  if (customTemplate) {
+    return applyTemplate(customTemplate, { task, codeFilePath, review: cleanReview })
+  }
   return `${codeFilePath} のコードにレビュー指摘がありました。指摘を反映して修正し、ファイルを更新してください。タスク: ${task} レビュー指摘: ${cleanReview}`
 }
 
 /** コードレビュープロンプト(ファイル参照版)を構築する */
-export function buildReviewPrompt(task: string, codeFilePath: string): string {
+export function buildReviewPrompt(task: string, codeFilePath: string, customTemplate?: string): string {
+  if (customTemplate) {
+    return applyTemplate(customTemplate, { task, codeFilePath })
+  }
   return `${codeFilePath} のコードをレビューしてください。タスク: ${task} 問題がなければ "APPROVED" と記載してください。修正が必要な場合は具体的な改善点を記載してください。`
 }
 
@@ -53,11 +72,23 @@ export function shouldContinueLoop(state: LoopState): boolean {
 
 /** 否定文脈のパターン */
 const NEGATION_PATTERNS = [
-  /not\s+approved/i,       // "not approved", "NOT APPROVED"
+  /not\s+approved/i,             // "not approved", "NOT APPROVED"
+  /cannot\s+approve/i,           // "cannot approve"
+  /can't\s+approve/i,            // "can't approve"
   /approved\s*ではありません/i,  // "APPROVED ではありません"
-  /approved\s*ではない/i,       // "APPROVEDではない"
-  /approved\s*できません/i,     // "APPROVEDできません"
-  /未\s*承認/,                  // "未承認"
+  /approved\s*ではない/i,        // "APPROVEDではない"
+  /approved\s*できません/i,      // "APPROVEDできません"
+  /承認できません/,               // "承認できません"
+  /未\s*承認/,                    // "未承認"
+]
+
+/** 承認を示すパターン */
+const APPROVAL_PATTERNS = [
+  /approved/i,                   // "APPROVED", "Approved"
+  /\blgtm\b/i,                   // "LGTM"
+  /looks\s+good/i,               // "Looks good", "looks good to me"
+  /承認/,                         // "承認します"
+  /問題ありません/,               // "問題ありません"
 ]
 
 /** レビュー結果が承認かどうか判定する */
@@ -66,7 +97,7 @@ export function isApproved(reviewText: string): boolean {
   if (NEGATION_PATTERNS.some(pattern => pattern.test(reviewText))) {
     return false
   }
-  return /approved/i.test(reviewText)
+  return APPROVAL_PATTERNS.some(pattern => pattern.test(reviewText))
 }
 
 /** レスポンスからコードブロックを抽出する */
@@ -83,9 +114,8 @@ export function extractCodeFromResponse(rawOutput: string): string | null {
   }
 
   if (blocks.length > 0) {
-    return blocks.reduce((longest, current) =>
-      current.length > longest.length ? current : longest
-    )
+    // 最後のコードブロックを採用（LLMは最終回答を末尾に出す傾向がある）
+    return blocks[blocks.length - 1]
   }
 
   // 2. フォールバック: Claude Code の ⏺ マーカー以降のコードを抽出

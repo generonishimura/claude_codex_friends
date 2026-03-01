@@ -10,10 +10,9 @@ import {
   waitForShellReady,
 } from './services/tmux.service.js'
 import { printError } from './ui/terminal.js'
+import { DEFAULTS } from './config/index.js'
 
 const execFileAsync = promisify(execFile)
-
-const SESSION_NAME = 'ccf'
 
 /**
  * REPL起動コマンドを構築する
@@ -43,20 +42,20 @@ export async function launchThreePane(): Promise<void> {
   }
 
   // 既存セッションがあれば破棄
-  if (await sessionExists(SESSION_NAME)) {
-    await destroySession(SESSION_NAME)
+  if (await sessionExists(DEFAULTS.sessionName)) {
+    await destroySession(DEFAULTS.sessionName)
   }
 
   // 3ペインセッション作成
-  const sessionResult = await createThreePaneSession(SESSION_NAME)
+  const sessionResult = await createThreePaneSession(DEFAULTS.sessionName)
   if (!sessionResult.ok) {
     printError(sessionResult.error.message)
     process.exit(1)
   }
 
-  const orchestratorTarget = `${SESSION_NAME}:0.0`
-  const claudeTarget = `${SESSION_NAME}:0.1`
-  const codexTarget = `${SESSION_NAME}:0.2`
+  const orchestratorTarget = `${DEFAULTS.sessionName}:0.0`
+  const claudeTarget = `${DEFAULTS.sessionName}:0.1`
+  const codexTarget = `${DEFAULTS.sessionName}:0.2`
 
   // 全ペインのシェル起動完了を待つ
   console.log('シェルの起動を待機中...')
@@ -68,7 +67,7 @@ export async function launchThreePane(): Promise<void> {
   for (const result of shellResults) {
     if (!result.ok) {
       printError(`シェルの起動に失敗: ${result.error.message}`)
-      await destroySession(SESSION_NAME)
+      await destroySession(DEFAULTS.sessionName)
       process.exit(1)
     }
   }
@@ -77,7 +76,7 @@ export async function launchThreePane(): Promise<void> {
   const claudeStart = await startClaude(claudeTarget)
   if (!claudeStart.ok) {
     printError(claudeStart.error.message)
-    await destroySession(SESSION_NAME)
+    await destroySession(DEFAULTS.sessionName)
     process.exit(1)
   }
 
@@ -85,7 +84,7 @@ export async function launchThreePane(): Promise<void> {
   const codexStart = await startCodex(codexTarget)
   if (!codexStart.ok) {
     printError(codexStart.error.message)
-    await destroySession(SESSION_NAME)
+    await destroySession(DEFAULTS.sessionName)
     process.exit(1)
   }
 
@@ -99,13 +98,13 @@ export async function launchThreePane(): Promise<void> {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     printError(`REPLの起動に失敗: ${message}`)
-    await destroySession(SESSION_NAME)
+    await destroySession(DEFAULTS.sessionName)
     process.exit(1)
   }
 
   // tmux セッションにアタッチ（同期実行でターミナルを引き渡す）
   const { status } = spawnSync(
-    'tmux', ['attach-session', '-t', SESSION_NAME],
+    'tmux', ['attach-session', '-t', DEFAULTS.sessionName],
     { stdio: 'inherit' },
   )
   process.exit(status ?? 0)

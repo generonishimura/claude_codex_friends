@@ -6,13 +6,27 @@ export const DEFAULTS = {
   timeoutMs: 5 * 60 * 1000,     // 5分
   pollIntervalMs: 3000,           // 3秒
   sessionName: 'ccf',
+  /** CLI起動待機時間 (ms) — Claude/Codex CLIの起動完了までの初回ウェイト */
+  cliStartupDelayMs: 15000,
+  /** プロンプト送信時のチャンクサイズ (文字数) — TUIバッファ制限対策 */
+  chunkSize: 200,
+  /** チャンク間ディレイ (ms) */
+  chunkDelayMs: 50,
+  /** Enter送信前ディレイ (ms) */
+  enterDelayMs: 300,
+  /** 完了判定の安定性閾値 — 連続同一出力の回数 */
+  stableThreshold: 2,
+  /** リトライ最大回数 */
+  maxRetries: 2,
+  /** リトライ間隔 (ms) */
+  retryDelayMs: 2000,
 } as const
 
 /** 実行モード */
 export type RunMode =
   | { mode: 'launcher' }
   | { mode: 'repl'; language?: string; maxIterations: number; timeoutMs: number; pollIntervalMs: number }
-  | { mode: 'auto'; config: LoopConfig & { sessionName: string } }
+  | { mode: 'auto'; config: LoopConfig & { sessionName: string; keepSession: boolean; logPath?: string } }
 
 /** CLI引数をパースして実行モードを判定する */
 export function parseMode(args: string[]): RunMode {
@@ -23,6 +37,8 @@ export function parseMode(args: string[]): RunMode {
   let timeoutMs: number = DEFAULTS.timeoutMs
   let pollIntervalMs: number = DEFAULTS.pollIntervalMs
   let replMode = false
+  let keepSession = false
+  let logPath: string | undefined
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
@@ -48,6 +64,12 @@ export function parseMode(args: string[]): RunMode {
         break
       case '--poll-interval':
         pollIntervalMs = parseInt(args[++i], 10)
+        break
+      case '--keep-session':
+        keepSession = true
+        break
+      case '--log':
+        logPath = args[++i]
         break
       case '-h':
       case '--help':
@@ -84,6 +106,8 @@ export function parseMode(args: string[]): RunMode {
       timeoutMs,
       pollIntervalMs,
       sessionName: DEFAULTS.sessionName,
+      keepSession,
+      logPath,
     },
   }
 }
@@ -112,6 +136,8 @@ Claude x Codex Friends — AI対話型コード生成・レビューツール
   -m, --max-iterations <n>    最大イテレーション数 (デフォルト: ${DEFAULTS.maxIterations})
   -t, --timeout <seconds>     タイムアウト秒数 (デフォルト: ${DEFAULTS.timeoutMs / 1000})
   --poll-interval <ms>        ポーリング間隔 ms (デフォルト: ${DEFAULTS.pollIntervalMs})
+  --keep-session              終了後もtmuxセッションを残す
+  --log <path>                イテレーション履歴をJSONファイルに保存
   -h, --help                  ヘルプを表示
 
 例:

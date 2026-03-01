@@ -22,11 +22,9 @@ async function main(): Promise<void> {
       const claudeTarget = `${sessionName}:0.1`
       const codexTarget = `${sessionName}:0.2`
 
-      const CLI_STARTUP_DELAY_MS = 15000
-
       console.log('Claude CLI の起動を待機中...')
       const claudeReady = await waitForCompletion(
-        claudeTarget, mode.timeoutMs, mode.pollIntervalMs, '', CLI_STARTUP_DELAY_MS,
+        claudeTarget, mode.timeoutMs, mode.pollIntervalMs, '', DEFAULTS.cliStartupDelayMs,
       )
       if (!claudeReady.ok) {
         printError(`Claude CLI の起動に失敗: ${claudeReady.error.message}`)
@@ -35,7 +33,7 @@ async function main(): Promise<void> {
 
       console.log('Codex CLI の起動を待機中...')
       const codexReady = await waitForCompletion(
-        codexTarget, mode.timeoutMs, mode.pollIntervalMs, '', CLI_STARTUP_DELAY_MS, true,
+        codexTarget, mode.timeoutMs, mode.pollIntervalMs, '', DEFAULTS.cliStartupDelayMs, true,
       )
       if (!codexReady.ok) {
         printError(`Codex CLI の起動に失敗: ${codexReady.error.message}`)

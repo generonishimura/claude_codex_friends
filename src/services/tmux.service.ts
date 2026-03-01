@@ -1,12 +1,13 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { writeFile, mkdir } from 'node:fs/promises'
+import { writeFile, mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Result, DomainError } from '../domain/types.js'
 import { ok, err } from '../domain/types.js'
 import { ERRORS } from '../domain/errors.js'
 import { stripAnsiCodes } from '../domain/loop.rules.js'
+import { DEFAULTS } from '../config/index.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -20,6 +21,14 @@ export async function saveCodeToTempFile(code: string, filename: string): Promis
   return filePath
 }
 
+/** 一時ファイルディレクトリを削除する */
+export async function cleanupTempFiles(): Promise<void> {
+  try {
+    await rm(CCF_TMP_DIR, { recursive: true, force: true })
+  } catch {
+    // クリーンアップ失敗は無視（致命的ではない）
+  }
+}
 
 /** tmux コマンドを実行する */
 async function tmux(...args: string[]): Promise<Result<string>> {
@@ -97,8 +106,8 @@ export async function sessionExists(sessionName: string): Promise<boolean> {
   return result.ok
 }
 
-/** シェルプロンプトのパターン（zsh/bash） */
-const SHELL_PROMPT_PATTERN = /[$%#]\s*$/
+/** シェルプロンプトのパターン（zsh/bash/fish等） */
+const SHELL_PROMPT_PATTERN = /[$%#>❯›]\s*$/
 
 /** ペインのシェルが起動完了するまで待つ */
 export async function waitForShellReady(
@@ -156,18 +165,17 @@ export async function sendPrompt(target: string, text: string): Promise<Result<v
   const flattened = text.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim()
 
   // 長いテキストはチャンクに分割して送信（TUIの入力バッファ制限対策）
-  const CHUNK_SIZE = 200
-  const chunks = splitIntoChunks(flattened, CHUNK_SIZE)
+  const chunks = splitIntoChunks(flattened, DEFAULTS.chunkSize)
 
   for (const chunk of chunks) {
     const result = await tmux('send-keys', '-t', target, '-l', chunk)
     if (!result.ok) return err(ERRORS.SEND_PROMPT_FAILED(result.error.message))
     // チャンク間に小さなディレイを入れてバッファを処理させる
-    await sleep(50)
+    await sleep(DEFAULTS.chunkDelayMs)
   }
 
   // Enter を送信してコマンド実行
-  await sleep(300)
+  await sleep(DEFAULTS.enterDelayMs)
   const enterResult = await tmux('send-keys', '-t', target, 'Enter')
   if (!enterResult.ok) return err(ERRORS.SEND_PROMPT_FAILED(enterResult.error.message))
 
@@ -197,8 +205,11 @@ function trimTrailingEmptyLines(text: string): string {
 
 /** CLI応答完了のプロンプトパターン */
 const COMPLETION_PATTERNS = [
-  /❯/,                 // Claude Code の入力プロンプト
-  /›/,                 // Codex の入力プロンプト (U+203A)
+  /❯/,                  // Claude Code の入力プロンプト
+  /›/,                  // Codex の入力プロンプト (U+203A)
+  />\s*$/,              // 一般的なCLI入力プロンプト
+  /\$\s*$/,             // シェルプロンプトフォールバック
+  /\?\s+for shortcuts/, // Claude Code のヘルプヒント
 ]
 
 /** ペインの出力が CLI の応答完了状態かどうか判定する */
@@ -225,7 +236,6 @@ export async function waitForCompletion(
   let trustAccepted = false
   let lastOutput = ''
   let stableCount = 0
-  const STABLE_THRESHOLD = 2 // 2回連続で同じなら安定と判定
 
   // 初回ウェイト（CLI起動等に必要な待ち時間）
   const delay = initialDelayMs || Math.min(pollIntervalMs, 2000)
@@ -254,7 +264,7 @@ export async function waitForCompletion(
     }
 
     if (
-      stableCount >= STABLE_THRESHOLD &&
+      stableCount >= DEFAULTS.stableThreshold &&
       output !== baselineText &&
       isCompletionState(output)
     ) {
@@ -269,4 +279,21 @@ export async function waitForCompletion(
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/** Result を返す非同期関数をリトライ付きで実行する */
+export async function withRetry<T>(
+  fn: () => Promise<Result<T, DomainError>>,
+  maxRetries: number = DEFAULTS.maxRetries,
+  delayMs: number = DEFAULTS.retryDelayMs,
+): Promise<Result<T, DomainError>> {
+  let lastResult: Result<T, DomainError> | undefined
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    lastResult = await fn()
+    if (lastResult.ok) return lastResult
+    if (attempt < maxRetries) {
+      await sleep(delayMs)
+    }
+  }
+  return lastResult!
 }

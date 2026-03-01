@@ -4,5 +4,7 @@ export type ReplCommand =
   | { type: 'claude'; payload: string }
   | { type: 'codex'; payload: string }
   | { type: 'status' }
+  | { type: 'history' }
+  | { type: 'last' }
   | { type: 'help' }
   | { type: 'exit' }

@@ -42,6 +42,18 @@ describe('buildInitialPrompt', () => {
     expect(result).toContain('typescript')
     expect(result).toContain('FizzBuzz')
   })
+
+  it('カスタムテンプレートが指定された場合はプレースホルダを置換して返す', () => {
+    const template = 'Generate code for: {{task}} in {{language}}'
+    const result = buildInitialPrompt('Sort array', 'python', template)
+    expect(result).toBe('Generate code for: Sort array in python')
+  })
+
+  it('カスタムテンプレートで言語未指定の場合は空文字に置換する', () => {
+    const template = 'Task: {{task}}, Lang: {{language}}'
+    const result = buildInitialPrompt('Sort array', undefined, template)
+    expect(result).toBe('Task: Sort array, Lang: ')
+  })
 })
 
 describe('buildFixPrompt', () => {
@@ -55,6 +67,12 @@ describe('buildFixPrompt', () => {
     expect(result).toContain('/tmp/ccf/code.ts')
     expect(result).toContain('エッジケースの処理が不足しています')
   })
+
+  it('カスタムテンプレートが指定された場合はプレースホルダを置換して返す', () => {
+    const template = 'Fix {{codeFilePath}} based on: {{review}} for task {{task}}'
+    const result = buildFixPrompt('Sort', '/tmp/code.ts', 'add tests', template)
+    expect(result).toBe('Fix /tmp/code.ts based on: add tests for task Sort')
+  })
 })
 
 describe('buildReviewPrompt', () => {
@@ -66,6 +84,12 @@ describe('buildReviewPrompt', () => {
     expect(result).toContain('FizzBuzz')
     expect(result).toContain('/tmp/ccf/code.ts')
     expect(result).toContain('APPROVED')
+  })
+
+  it('カスタムテンプレートが指定された場合はプレースホルダを置換して返す', () => {
+    const template = 'Review {{codeFilePath}} for {{task}}'
+    const result = buildReviewPrompt('Sort', '/tmp/code.ts', template)
+    expect(result).toBe('Review /tmp/code.ts for Sort')
   })
 })
 
@@ -148,6 +172,37 @@ describe('isApproved', () => {
   it('否定文脈でない単独のAPPROVEDは承認と判定する', () => {
     expect(isApproved('判定\nAPPROVED\n問題ありません。')).toBe(true)
   })
+
+  it('LGTMは承認と判定する', () => {
+    expect(isApproved('LGTM! Great implementation.')).toBe(true)
+    expect(isApproved('lgtm')).toBe(true)
+  })
+
+  it('Looks good / looks good to meは承認と判定する', () => {
+    expect(isApproved('Looks good to me!')).toBe(true)
+    expect(isApproved('This looks good. Ship it.')).toBe(true)
+  })
+
+  it('Approved with suggestionsは承認と判定する（軽微な指摘付き承認）', () => {
+    expect(isApproved('Approved with minor suggestions: add a comment.')).toBe(true)
+  })
+
+  it('「承認」（日本語）は承認と判定する', () => {
+    expect(isApproved('承認します。問題ありません。')).toBe(true)
+    expect(isApproved('コードを承認します')).toBe(true)
+  })
+
+  it('「問題ありません」は承認と判定する', () => {
+    expect(isApproved('コードに問題ありません。')).toBe(true)
+  })
+
+  it('「cannot approve」は否定なので未承認と判定する', () => {
+    expect(isApproved('I cannot approve this code yet.')).toBe(false)
+  })
+
+  it('「承認できません」は否定なので未承認と判定する', () => {
+    expect(isApproved('この状態では承認できません。')).toBe(false)
+  })
 })
 
 describe('extractCodeFromResponse', () => {
@@ -182,7 +237,7 @@ print("hello")
     expect(code).toBe('print("hello")')
   })
 
-  it('複数のコードブロックがある場合は最も長いものを返す', () => {
+  it('複数のコードブロックがある場合は最後のものを返す', () => {
     const response = `
 \`\`\`typescript
 const a = 1
@@ -198,6 +253,31 @@ function longFunction() {
 `
     const code = extractCodeFromResponse(response)
     expect(code).toContain('function longFunction')
+  })
+
+  it('説明文中の短いコード例より最後の完全なコードブロックを優先する', () => {
+    const response = `
+まず基本的な書き方:
+
+\`\`\`typescript
+console.log("example")
+// これは長い説明文の中のコード例です
+// たくさんの行があるように見えますが説明です
+// もっと行を追加して長く見せます
+// さらにもう一行
+\`\`\`
+
+最終的なコード:
+
+\`\`\`typescript
+function solve() {
+  return 42
+}
+\`\`\`
+`
+    const code = extractCodeFromResponse(response)
+    expect(code).toContain('function solve')
+    expect(code).not.toContain('example')
   })
 
   it('Claude Codeの⏺マーカーからコードを抽出できる', () => {

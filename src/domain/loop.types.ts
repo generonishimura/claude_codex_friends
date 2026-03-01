@@ -10,6 +10,16 @@ export interface LoopState {
   hasError: boolean
 }
 
+/** カスタムプロンプトテンプレート */
+export interface CustomPrompts {
+  /** 初回生成プロンプト（{{task}}, {{language}} をプレースホルダとして使用可能） */
+  initial?: string
+  /** レビュープロンプト（{{task}}, {{codeFilePath}} を使用可能） */
+  review?: string
+  /** 修正プロンプト（{{task}}, {{codeFilePath}}, {{review}} を使用可能） */
+  fix?: string
+}
+
 /** ループ設定 */
 export interface LoopConfig {
   /** タスクの説明 */
@@ -24,6 +34,8 @@ export interface LoopConfig {
   timeoutMs: number
   /** ポーリング間隔 (ms) */
   pollIntervalMs: number
+  /** カスタムプロンプトテンプレート */
+  prompts?: CustomPrompts
 }
 
 /** 1イテレーションの結果 */

@@ -1,8 +1,9 @@
 import { writeFile } from 'node:fs/promises'
-import type { LoopConfig, LoopResult, IterationResult } from '../domain/loop.types.js'
+import type { LoopConfig, LoopResult, IterationResult, CustomPrompts } from '../domain/loop.types.js'
 import type { Result, DomainError } from '../domain/types.js'
 import { ok, err } from '../domain/types.js'
 import { ERRORS } from '../domain/errors.js'
+import { DEFAULTS } from '../config/index.js'
 import {
   buildInitialPrompt,
   buildFixPrompt,
@@ -22,6 +23,8 @@ import {
   capturePane,
   waitForCompletion,
   saveCodeToTempFile,
+  cleanupTempFiles,
+  withRetry,
 } from '../services/tmux.service.js'
 import {
   printBanner,
@@ -49,6 +52,7 @@ export interface RunLoopConfig {
   maxIterations: number
   timeoutMs: number
   pollIntervalMs: number
+  prompts?: CustomPrompts
 }
 
 /** ループのみを実行する（セッション管理は呼び出し元に任せる） */
@@ -78,10 +82,10 @@ export async function runLoop(
 
     let prompt: string
     if (isFirstIteration) {
-      prompt = buildInitialPrompt(config.task, config.language)
+      prompt = buildInitialPrompt(config.task, config.language, config.prompts?.initial)
     } else {
       const lastReview = iterations[iterations.length - 1]?.review ?? ''
-      prompt = buildFixPrompt(config.task, codeFilePath, lastReview)
+      prompt = buildFixPrompt(config.task, codeFilePath, lastReview, config.prompts?.fix)
     }
 
     printPhase(isFirstIteration ? 'generate' : 'fix')
@@ -96,12 +100,14 @@ export async function runLoop(
       break
     }
 
-    // Claude の応答を待つ
-    const claudeResponse = await waitForCompletion(
-      targets.claude,
-      config.timeoutMs,
-      config.pollIntervalMs,
-      claudeBaselineText,
+    // Claude の応答を待つ（リトライ付き）
+    const claudeResponse = await withRetry(() =>
+      waitForCompletion(
+        targets.claude,
+        config.timeoutMs,
+        config.pollIntervalMs,
+        claudeBaselineText,
+      )
     )
     if (!claudeResponse.ok) {
       printError(claudeResponse.error.message)
@@ -124,7 +130,7 @@ export async function runLoop(
     // --- Codex にレビュー送信 ---
     printPhase('review')
 
-    const reviewPrompt = buildReviewPrompt(config.task, codeFilePath)
+    const reviewPrompt = buildReviewPrompt(config.task, codeFilePath, config.prompts?.review)
 
     // 送信前のベースライン取得
     const codexBaseline = await capturePane(targets.codex)
@@ -136,12 +142,14 @@ export async function runLoop(
       break
     }
 
-    // Codex の応答を待つ
-    const codexResponse = await waitForCompletion(
-      targets.codex,
-      config.timeoutMs,
-      config.pollIntervalMs,
-      codexBaselineText,
+    // Codex の応答を待つ（リトライ付き）
+    const codexResponse = await withRetry(() =>
+      waitForCompletion(
+        targets.codex,
+        config.timeoutMs,
+        config.pollIntervalMs,
+        codexBaselineText,
+      )
     )
     if (!codexResponse.ok) {
       printError(codexResponse.error.message)
@@ -178,6 +186,9 @@ export async function runLoop(
     }
   }
 
+  // 一時ファイルのクリーンアップ
+  await cleanupTempFiles()
+
   return ok({
     finalCode: currentCode,
     iterations,
@@ -188,7 +199,7 @@ export async function runLoop(
 
 /** エージェントループを実行する（セッション作成 → CLI起動 → ループ → 結果返却） */
 export async function runAgentLoop(
-  config: LoopConfig & { sessionName: string }
+  config: LoopConfig & { sessionName: string; keepSession?: boolean; logPath?: string }
 ): Promise<Result<LoopResult, DomainError>> {
   printBanner()
   printConfig(config.task, config.language, config.maxIterations)
@@ -233,16 +244,14 @@ export async function runAgentLoop(
     return err(codexStart.error)
   }
 
-  // CLIの起動完了を待つ（起動に15秒程度かかる場合がある）
-  const CLI_STARTUP_DELAY_MS = 15000
-
+  // CLIの起動完了を待つ
   console.log('Claude CLI の起動を待機中...')
   const claudeReady = await waitForCompletion(
     claudeTarget,
     config.timeoutMs,
     config.pollIntervalMs,
     '',
-    CLI_STARTUP_DELAY_MS,
+    DEFAULTS.cliStartupDelayMs,
   )
   if (!claudeReady.ok) {
     printError(`Claude CLI の起動に失敗: ${claudeReady.error.message}`)
@@ -256,7 +265,7 @@ export async function runAgentLoop(
     config.timeoutMs,
     config.pollIntervalMs,
     '',
-    CLI_STARTUP_DELAY_MS,
+    DEFAULTS.cliStartupDelayMs,
     true, // autoAcceptTrust
   )
   if (!codexReady.ok) {
@@ -268,9 +277,31 @@ export async function runAgentLoop(
   // ループ実行
   const result = await runLoop(config, { claude: claudeTarget, codex: codexTarget })
 
-  // 結果を返す（セッションは残す — ユーザーが確認できるように）
-  console.log(`\ntmux セッション "${config.sessionName}" は残しています。`)
-  console.log(`確認後、tmux kill-session -t ${config.sessionName} で削除してください。`)
+  // イテレーション履歴をログファイルに保存
+  if (config.logPath && result.ok) {
+    try {
+      const logData = {
+        task: config.task,
+        language: config.language,
+        timestamp: new Date().toISOString(),
+        ...result.value,
+      }
+      await writeFile(config.logPath, JSON.stringify(logData, null, 2), 'utf-8')
+      console.log(`ログを保存しました: ${config.logPath}`)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      printError(`ログ保存に失敗: ${message}`)
+    }
+  }
+
+  // セッション管理
+  if (config.keepSession) {
+    console.log(`\ntmux セッション "${config.sessionName}" は残しています。`)
+    console.log(`確認後、tmux kill-session -t ${config.sessionName} で削除してください。`)
+  } else {
+    await destroySession(config.sessionName)
+    console.log(`\ntmux セッション "${config.sessionName}" を削除しました。`)
+  }
 
   return result
 }

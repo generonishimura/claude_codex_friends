@@ -13,6 +13,8 @@ export function parseCommand(input: string): ReplCommand {
   }
 
   if (trimmed === '/status') return { type: 'status' }
+  if (trimmed === '/history') return { type: 'history' }
+  if (trimmed === '/last') return { type: 'last' }
   if (trimmed === '/help') return { type: 'help' }
   if (trimmed === '/exit') return { type: 'exit' }
 
