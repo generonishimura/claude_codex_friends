@@ -106,8 +106,8 @@ export async function sessionExists(sessionName: string): Promise<boolean> {
   return result.ok
 }
 
-/** シェルプロンプトのパターン（zsh/bash） */
-const SHELL_PROMPT_PATTERN = /[$%#]\s*$/
+/** シェルプロンプトのパターン（zsh/bash/fish等） */
+const SHELL_PROMPT_PATTERN = /[$%#>❯›]\s*$/
 
 /** ペインのシェルが起動完了するまで待つ */
 export async function waitForShellReady(
@@ -205,8 +205,11 @@ function trimTrailingEmptyLines(text: string): string {
 
 /** CLI応答完了のプロンプトパターン */
 const COMPLETION_PATTERNS = [
-  /❯/,                 // Claude Code の入力プロンプト
-  /›/,                 // Codex の入力プロンプト (U+203A)
+  /❯/,                  // Claude Code の入力プロンプト
+  /›/,                  // Codex の入力プロンプト (U+203A)
+  />\s*$/,              // 一般的なCLI入力プロンプト
+  /\$\s*$/,             // シェルプロンプトフォールバック
+  /\?\s+for shortcuts/, // Claude Code のヘルプヒント
 ]
 
 /** ペインの出力が CLI の応答完了状態かどうか判定する */
