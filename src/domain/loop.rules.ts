@@ -6,8 +6,20 @@ export function stripAnsiCodes(text: string): string {
   return text.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
 }
 
+/** プレースホルダを値で置換する */
+function applyTemplate(template: string, vars: Record<string, string>): string {
+  let result = template
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value)
+  }
+  return result
+}
+
 /** 初回コード生成プロンプトを構築する */
-export function buildInitialPrompt(task: string, language?: string): string {
+export function buildInitialPrompt(task: string, language?: string, customTemplate?: string): string {
+  if (customTemplate) {
+    return applyTemplate(customTemplate, { task, language: language ?? '' })
+  }
   const langPart = language ? `\n言語: ${language}` : ''
   return [
     '以下のタスクに対してコードを生成してください。',
@@ -22,13 +34,20 @@ export function buildFixPrompt(
   task: string,
   codeFilePath: string,
   review: string,
+  customTemplate?: string,
 ): string {
   const cleanReview = review.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim()
+  if (customTemplate) {
+    return applyTemplate(customTemplate, { task, codeFilePath, review: cleanReview })
+  }
   return `${codeFilePath} のコードにレビュー指摘がありました。指摘を反映して修正し、ファイルを更新してください。タスク: ${task} レビュー指摘: ${cleanReview}`
 }
 
 /** コードレビュープロンプト(ファイル参照版)を構築する */
-export function buildReviewPrompt(task: string, codeFilePath: string): string {
+export function buildReviewPrompt(task: string, codeFilePath: string, customTemplate?: string): string {
+  if (customTemplate) {
+    return applyTemplate(customTemplate, { task, codeFilePath })
+  }
   return `${codeFilePath} のコードをレビューしてください。タスク: ${task} 問題がなければ "APPROVED" と記載してください。修正が必要な場合は具体的な改善点を記載してください。`
 }
 

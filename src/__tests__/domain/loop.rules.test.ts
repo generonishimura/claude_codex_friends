@@ -42,6 +42,18 @@ describe('buildInitialPrompt', () => {
     expect(result).toContain('typescript')
     expect(result).toContain('FizzBuzz')
   })
+
+  it('カスタムテンプレートが指定された場合はプレースホルダを置換して返す', () => {
+    const template = 'Generate code for: {{task}} in {{language}}'
+    const result = buildInitialPrompt('Sort array', 'python', template)
+    expect(result).toBe('Generate code for: Sort array in python')
+  })
+
+  it('カスタムテンプレートで言語未指定の場合は空文字に置換する', () => {
+    const template = 'Task: {{task}}, Lang: {{language}}'
+    const result = buildInitialPrompt('Sort array', undefined, template)
+    expect(result).toBe('Task: Sort array, Lang: ')
+  })
 })
 
 describe('buildFixPrompt', () => {
@@ -55,6 +67,12 @@ describe('buildFixPrompt', () => {
     expect(result).toContain('/tmp/ccf/code.ts')
     expect(result).toContain('エッジケースの処理が不足しています')
   })
+
+  it('カスタムテンプレートが指定された場合はプレースホルダを置換して返す', () => {
+    const template = 'Fix {{codeFilePath}} based on: {{review}} for task {{task}}'
+    const result = buildFixPrompt('Sort', '/tmp/code.ts', 'add tests', template)
+    expect(result).toBe('Fix /tmp/code.ts based on: add tests for task Sort')
+  })
 })
 
 describe('buildReviewPrompt', () => {
@@ -66,6 +84,12 @@ describe('buildReviewPrompt', () => {
     expect(result).toContain('FizzBuzz')
     expect(result).toContain('/tmp/ccf/code.ts')
     expect(result).toContain('APPROVED')
+  })
+
+  it('カスタムテンプレートが指定された場合はプレースホルダを置換して返す', () => {
+    const template = 'Review {{codeFilePath}} for {{task}}'
+    const result = buildReviewPrompt('Sort', '/tmp/code.ts', template)
+    expect(result).toBe('Review /tmp/code.ts for Sort')
   })
 })
 

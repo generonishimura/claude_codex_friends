@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises'
-import type { LoopConfig, LoopResult, IterationResult } from '../domain/loop.types.js'
+import type { LoopConfig, LoopResult, IterationResult, CustomPrompts } from '../domain/loop.types.js'
 import type { Result, DomainError } from '../domain/types.js'
 import { ok, err } from '../domain/types.js'
 import { ERRORS } from '../domain/errors.js'
@@ -52,6 +52,7 @@ export interface RunLoopConfig {
   maxIterations: number
   timeoutMs: number
   pollIntervalMs: number
+  prompts?: CustomPrompts
 }
 
 /** ループのみを実行する（セッション管理は呼び出し元に任せる） */
@@ -81,10 +82,10 @@ export async function runLoop(
 
     let prompt: string
     if (isFirstIteration) {
-      prompt = buildInitialPrompt(config.task, config.language)
+      prompt = buildInitialPrompt(config.task, config.language, config.prompts?.initial)
     } else {
       const lastReview = iterations[iterations.length - 1]?.review ?? ''
-      prompt = buildFixPrompt(config.task, codeFilePath, lastReview)
+      prompt = buildFixPrompt(config.task, codeFilePath, lastReview, config.prompts?.fix)
     }
 
     printPhase(isFirstIteration ? 'generate' : 'fix')
@@ -129,7 +130,7 @@ export async function runLoop(
     // --- Codex にレビュー送信 ---
     printPhase('review')
 
-    const reviewPrompt = buildReviewPrompt(config.task, codeFilePath)
+    const reviewPrompt = buildReviewPrompt(config.task, codeFilePath, config.prompts?.review)
 
     // 送信前のベースライン取得
     const codexBaseline = await capturePane(targets.codex)
