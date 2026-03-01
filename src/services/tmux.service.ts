@@ -7,6 +7,7 @@ import type { Result, DomainError } from '../domain/types.js'
 import { ok, err } from '../domain/types.js'
 import { ERRORS } from '../domain/errors.js'
 import { stripAnsiCodes } from '../domain/loop.rules.js'
+import { DEFAULTS } from '../config/index.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -156,18 +157,17 @@ export async function sendPrompt(target: string, text: string): Promise<Result<v
   const flattened = text.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim()
 
   // 長いテキストはチャンクに分割して送信（TUIの入力バッファ制限対策）
-  const CHUNK_SIZE = 200
-  const chunks = splitIntoChunks(flattened, CHUNK_SIZE)
+  const chunks = splitIntoChunks(flattened, DEFAULTS.chunkSize)
 
   for (const chunk of chunks) {
     const result = await tmux('send-keys', '-t', target, '-l', chunk)
     if (!result.ok) return err(ERRORS.SEND_PROMPT_FAILED(result.error.message))
     // チャンク間に小さなディレイを入れてバッファを処理させる
-    await sleep(50)
+    await sleep(DEFAULTS.chunkDelayMs)
   }
 
   // Enter を送信してコマンド実行
-  await sleep(300)
+  await sleep(DEFAULTS.enterDelayMs)
   const enterResult = await tmux('send-keys', '-t', target, 'Enter')
   if (!enterResult.ok) return err(ERRORS.SEND_PROMPT_FAILED(enterResult.error.message))
 
@@ -225,7 +225,6 @@ export async function waitForCompletion(
   let trustAccepted = false
   let lastOutput = ''
   let stableCount = 0
-  const STABLE_THRESHOLD = 2 // 2回連続で同じなら安定と判定
 
   // 初回ウェイト（CLI起動等に必要な待ち時間）
   const delay = initialDelayMs || Math.min(pollIntervalMs, 2000)
@@ -254,7 +253,7 @@ export async function waitForCompletion(
     }
 
     if (
-      stableCount >= STABLE_THRESHOLD &&
+      stableCount >= DEFAULTS.stableThreshold &&
       output !== baselineText &&
       isCompletionState(output)
     ) {

@@ -6,6 +6,16 @@ export const DEFAULTS = {
   timeoutMs: 5 * 60 * 1000,     // 5分
   pollIntervalMs: 3000,           // 3秒
   sessionName: 'ccf',
+  /** CLI起動待機時間 (ms) — Claude/Codex CLIの起動完了までの初回ウェイト */
+  cliStartupDelayMs: 15000,
+  /** プロンプト送信時のチャンクサイズ (文字数) — TUIバッファ制限対策 */
+  chunkSize: 200,
+  /** チャンク間ディレイ (ms) */
+  chunkDelayMs: 50,
+  /** Enter送信前ディレイ (ms) */
+  enterDelayMs: 300,
+  /** 完了判定の安定性閾値 — 連続同一出力の回数 */
+  stableThreshold: 2,
 } as const
 
 /** 実行モード */

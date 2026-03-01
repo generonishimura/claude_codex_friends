@@ -3,6 +3,7 @@ import type { LoopConfig, LoopResult, IterationResult } from '../domain/loop.typ
 import type { Result, DomainError } from '../domain/types.js'
 import { ok, err } from '../domain/types.js'
 import { ERRORS } from '../domain/errors.js'
+import { DEFAULTS } from '../config/index.js'
 import {
   buildInitialPrompt,
   buildFixPrompt,
@@ -233,16 +234,14 @@ export async function runAgentLoop(
     return err(codexStart.error)
   }
 
-  // CLIの起動完了を待つ（起動に15秒程度かかる場合がある）
-  const CLI_STARTUP_DELAY_MS = 15000
-
+  // CLIの起動完了を待つ
   console.log('Claude CLI の起動を待機中...')
   const claudeReady = await waitForCompletion(
     claudeTarget,
     config.timeoutMs,
     config.pollIntervalMs,
     '',
-    CLI_STARTUP_DELAY_MS,
+    DEFAULTS.cliStartupDelayMs,
   )
   if (!claudeReady.ok) {
     printError(`Claude CLI の起動に失敗: ${claudeReady.error.message}`)
@@ -256,7 +255,7 @@ export async function runAgentLoop(
     config.timeoutMs,
     config.pollIntervalMs,
     '',
-    CLI_STARTUP_DELAY_MS,
+    DEFAULTS.cliStartupDelayMs,
     true, // autoAcceptTrust
   )
   if (!codexReady.ok) {
