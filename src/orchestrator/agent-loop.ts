@@ -23,6 +23,7 @@ import {
   capturePane,
   waitForCompletion,
   saveCodeToTempFile,
+  cleanupTempFiles,
 } from '../services/tmux.service.js'
 import {
   printBanner,
@@ -178,6 +179,9 @@ export async function runLoop(
       printError(`ファイル保存に失敗: ${message}`)
     }
   }
+
+  // 一時ファイルのクリーンアップ
+  await cleanupTempFiles()
 
   return ok({
     finalCode: currentCode,
