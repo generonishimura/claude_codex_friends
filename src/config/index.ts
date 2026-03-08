@@ -112,16 +112,6 @@ export function parseMode(args: string[]): RunMode {
   }
 }
 
-/** 後方互換性のために残す（自動ループモード用） */
-export function parseArgs(args: string[]): LoopConfig & { sessionName: string } {
-  const mode = parseMode(args)
-  if (mode.mode === 'auto') return mode.config
-  // parseArgs は自動ループモード前提なので、それ以外はエラー
-  console.error('エラー: タスクの説明を指定してください。')
-  printHelp()
-  process.exit(1)
-}
-
 function printHelp(): void {
   console.log(`
 Claude x Codex Friends — AI対話型コード生成・レビューツール

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import type { Result, DomainError } from '../domain/types.js'
 import { ok, err } from '../domain/types.js'
 import { ERRORS } from '../domain/errors.js'
-import { stripAnsiCodes } from '../domain/loop.rules.js'
+import { stripAnsiCodes, isCompletionState } from '../domain/loop.rules.js'
 import { DEFAULTS } from '../config/index.js'
 
 const execFileAsync = promisify(execFile)
@@ -203,23 +203,6 @@ function trimTrailingEmptyLines(text: string): string {
   return text.replace(/\n+$/, '\n')
 }
 
-/** CLI応答完了のプロンプトパターン */
-const COMPLETION_PATTERNS = [
-  /❯/,                  // Claude Code の入力プロンプト
-  /›/,                  // Codex の入力プロンプト (U+203A)
-  />\s*$/,              // 一般的なCLI入力プロンプト
-  /\$\s*$/,             // シェルプロンプトフォールバック
-  /\?\s+for shortcuts/, // Claude Code のヘルプヒント
-]
-
-/** ペインの出力が CLI の応答完了状態かどうか判定する */
-export function isCompletionState(paneOutput: string): boolean {
-  const cleaned = stripAnsiCodes(paneOutput).trimEnd()
-  // 最後の数行だけチェック（中間出力の誤検知を防ぐ）
-  const lastLines = cleaned.split('\n').slice(-5).join('\n')
-  return COMPLETION_PATTERNS.some(pattern => pattern.test(lastLines))
-}
-
 /** 信頼確認ダイアログのパターン */
 const TRUST_PROMPT_PATTERN = /Do you trust the contents/
 
@@ -274,7 +257,13 @@ export async function waitForCompletion(
     await sleep(pollIntervalMs)
   }
 
-  return err(ERRORS.TIMEOUT(target, timeoutMs))
+  // タイムアウト時にデバッグ情報として最後のキャプチャ末尾を含める
+  const lastLines = lastOutput.split('\n').slice(-3).join('\n').trim()
+  const debugInfo = lastLines ? ` 最後の出力: "${lastLines}"` : ''
+  return err({
+    code: 'TIMEOUT',
+    message: `${target} の応答がタイムアウトしました (${timeoutMs}ms)。${debugInfo}`,
+  })
 }
 
 function sleep(ms: number): Promise<void> {

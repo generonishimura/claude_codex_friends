@@ -7,6 +7,8 @@ import {
   isApproved,
   extractCodeFromResponse,
   stripAnsiCodes,
+  isCompletionState,
+  resolveFileExtension,
 } from '../../domain/loop.rules.js'
 import type { LoopState } from '../../domain/loop.types.js'
 
@@ -309,5 +311,86 @@ const x = 42
 `
     const code = extractCodeFromResponse(response)
     expect(code).toBe('const x = 42')
+  })
+})
+
+describe('isCompletionState', () => {
+  it('Claude Code の ❯ プロンプトを完了状態と判定する', () => {
+    const output = 'コードを生成しました。\n\n❯ '
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('Codex の › プロンプトを完了状態と判定する', () => {
+    const output = 'レビュー完了\n› '
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('一般的な > プロンプトを完了状態と判定する', () => {
+    const output = 'some output\n> '
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('シェルの $ プロンプトを完了状態と判定する', () => {
+    const output = 'command done\n$ '
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('Claude Code の "? for shortcuts" ヒントを完了状態と判定する', () => {
+    const output = 'some output\n? for shortcuts'
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('生成途中の出力は完了状態ではないと判定する', () => {
+    const output = 'function fizzbuzz(n: number) {\n  if (n % 3 === 0) return "Fizz"\n'
+    expect(isCompletionState(output)).toBe(false)
+  })
+
+  it('空文字列は完了状態ではないと判定する', () => {
+    expect(isCompletionState('')).toBe(false)
+  })
+
+  it('ANSIコードが含まれていても正しく判定する', () => {
+    const output = '\x1b[32mDone\x1b[0m\n❯ '
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('中間行にプロンプト文字があっても最後の5行で判定する', () => {
+    const lines = [
+      '❯ previous command',
+      'line 1',
+      'line 2',
+      'line 3',
+      'line 4',
+      'line 5',
+      'still generating...',
+    ]
+    expect(isCompletionState(lines.join('\n'))).toBe(false)
+  })
+})
+
+describe('resolveFileExtension', () => {
+  it('typescriptはtsを返す', () => {
+    expect(resolveFileExtension('typescript')).toBe('ts')
+  })
+
+  it('pythonはpyを返す', () => {
+    expect(resolveFileExtension('python')).toBe('py')
+  })
+
+  it('goはgoを返す', () => {
+    expect(resolveFileExtension('go')).toBe('go')
+  })
+
+  it('大文字小文字を区別しない', () => {
+    expect(resolveFileExtension('TypeScript')).toBe('ts')
+    expect(resolveFileExtension('PYTHON')).toBe('py')
+  })
+
+  it('未知の言語はtxtを返す', () => {
+    expect(resolveFileExtension('brainfuck')).toBe('txt')
+  })
+
+  it('undefinedはtxtを返す', () => {
+    expect(resolveFileExtension(undefined)).toBe('txt')
   })
 })
