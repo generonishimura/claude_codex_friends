@@ -17,6 +17,19 @@ export function parseCommand(input: string): ReplCommand {
   if (trimmed === '/last') return { type: 'last' }
   if (trimmed === '/help') return { type: 'help' }
   if (trimmed === '/exit') return { type: 'exit' }
+  if (trimmed === '/accept') return { type: 'accept' }
+  if (trimmed === '/reject') return { type: 'reject' }
+
+  if (trimmed.startsWith('/continue')) {
+    const arg = trimmed.slice('/continue'.length).trim()
+    const n = parseInt(arg, 10)
+    return { type: 'continue', payload: Number.isNaN(n) ? undefined : n }
+  }
+
+  if (trimmed.startsWith('/save')) {
+    const arg = trimmed.slice('/save'.length).trim()
+    return { type: 'save', payload: arg || undefined }
+  }
 
   return { type: 'task', payload: trimmed }
 }
