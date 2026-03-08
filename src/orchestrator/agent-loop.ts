@@ -1,18 +1,11 @@
 import { writeFile } from 'node:fs/promises'
-import type { LoopConfig, LoopResult, IterationResult, CustomPrompts } from '../domain/loop.types.js'
+import type { LoopConfig, LoopResult, CustomPrompts } from '../domain/loop.types.js'
 import type { Result, DomainError } from '../domain/types.js'
 import { ok, err } from '../domain/types.js'
-import { ERRORS } from '../domain/errors.js'
 import { DEFAULTS } from '../config/index.js'
-import {
-  buildInitialPrompt,
-  buildFixPrompt,
-  buildReviewPrompt,
-  shouldContinueLoop,
-  isApproved as checkApproved,
-  extractCodeFromResponse,
-  resolveFileExtension,
-} from '../domain/loop.rules.js'
+import type { EngineResult, UserDecision, AskUserContext } from '../domain/engine.types.js'
+import { LoopEngine } from './loop-engine.js'
+import type { LoopTargets, LoopEngineConfig } from './loop-engine.js'
 import {
   checkTmuxAvailable,
   createSession,
@@ -20,30 +13,16 @@ import {
   sessionExists,
   startClaude,
   startCodex,
-  sendPrompt,
-  capturePane,
   waitForCompletion,
-  saveCodeToTempFile,
-  cleanupTempFiles,
-  withRetry,
 } from '../services/tmux.service.js'
 import {
   printBanner,
   printConfig,
-  printIteration,
-  printPhase,
-  printApproved,
-  printMaxIterationsReached,
   printError,
-  printSaved,
   printSessionInfo,
 } from '../ui/terminal.js'
 
-/** ペインターゲット */
-export interface LoopTargets {
-  claude: string
-  codex: string
-}
+export type { LoopTargets }
 
 /** ループ実行に必要な設定（セッション管理は含まない） */
 export interface RunLoopConfig {
@@ -54,6 +33,18 @@ export interface RunLoopConfig {
   timeoutMs: number
   pollIntervalMs: number
   prompts?: CustomPrompts
+  /** ユーザー判断コールバック（対話モード用） */
+  onAskUser?: (context: AskUserContext) => Promise<UserDecision>
+}
+
+/** EngineResult を既存の LoopResult に変換する */
+function toLoopResult(result: EngineResult): LoopResult {
+  return {
+    finalCode: result.finalCode,
+    iterations: result.iterations,
+    approved: result.approved,
+    totalIterations: result.totalIterations,
+  }
 }
 
 /** ループのみを実行する（セッション管理は呼び出し元に任せる） */
@@ -61,141 +52,23 @@ export async function runLoop(
   config: RunLoopConfig,
   targets: LoopTargets,
 ): Promise<Result<LoopResult, DomainError>> {
-  const iterations: IterationResult[] = []
-  let currentCode: string | null = null
-  let codeFilePath = ''
-  let approved = false
-  let iteration = 0
-
-  while (
-    shouldContinueLoop({
-      iteration,
-      maxIterations: config.maxIterations,
-      approved,
-      hasError: false,
-    })
-  ) {
-    iteration++
-    printIteration(iteration, config.maxIterations)
-
-    // --- Claude にプロンプト送信 ---
-    const isFirstIteration = iteration === 1
-
-    let prompt: string
-    if (isFirstIteration) {
-      prompt = buildInitialPrompt(config.task, config.language, config.prompts?.initial)
-    } else {
-      const lastReview = iterations[iterations.length - 1]?.review ?? ''
-      prompt = buildFixPrompt(config.task, codeFilePath, lastReview, config.prompts?.fix)
-    }
-
-    printPhase(isFirstIteration ? 'generate' : 'fix')
-
-    // 送信前のベースライン取得
-    const claudeBaseline = await capturePane(targets.claude)
-    const claudeBaselineText = claudeBaseline.ok ? claudeBaseline.value : ''
-
-    const sendClaudeResult = await sendPrompt(targets.claude, prompt)
-    if (!sendClaudeResult.ok) {
-      printError(sendClaudeResult.error.message)
-      break
-    }
-
-    // Claude の応答を待つ（リトライ付き）
-    const claudeResponse = await withRetry(() =>
-      waitForCompletion(
-        targets.claude,
-        config.timeoutMs,
-        config.pollIntervalMs,
-        claudeBaselineText,
-      )
-    )
-    if (!claudeResponse.ok) {
-      printError(claudeResponse.error.message)
-      break
-    }
-
-    // コードを抽出 — capture-pane の全テキストから直接抽出
-    const extractedCode = extractCodeFromResponse(claudeResponse.value)
-    if (!extractedCode) {
-      printError(ERRORS.CODE_EXTRACTION_FAILED.message)
-      iterations.push({ iteration, code: null, review: null, approved: false })
-      break
-    }
-    currentCode = extractedCode
-
-    // コードを一時ファイルに保存（CLIからファイルパスで参照可能にする）
-    const ext = resolveFileExtension(config.language)
-    codeFilePath = await saveCodeToTempFile(currentCode, `code_iter${iteration}.${ext}`)
-
-    // --- Codex にレビュー送信 ---
-    printPhase('review')
-
-    const reviewPrompt = buildReviewPrompt(config.task, codeFilePath, config.prompts?.review)
-
-    // 送信前のベースライン取得
-    const codexBaseline = await capturePane(targets.codex)
-    const codexBaselineText = codexBaseline.ok ? codexBaseline.value : ''
-
-    const sendCodexResult = await sendPrompt(targets.codex, reviewPrompt)
-    if (!sendCodexResult.ok) {
-      printError(sendCodexResult.error.message)
-      break
-    }
-
-    // Codex の応答を待つ（リトライ付き）
-    const codexResponse = await withRetry(() =>
-      waitForCompletion(
-        targets.codex,
-        config.timeoutMs,
-        config.pollIntervalMs,
-        codexBaselineText,
-      )
-    )
-    if (!codexResponse.ok) {
-      printError(codexResponse.error.message)
-      break
-    }
-
-    // レビュー全文から承認判定
-    approved = checkApproved(codexResponse.value)
-
-    iterations.push({
-      iteration,
-      code: currentCode,
-      review: codexResponse.value,
-      approved,
-    })
-
-    if (approved) {
-      printApproved()
-    }
+  const engineConfig: LoopEngineConfig = {
+    task: config.task,
+    language: config.language,
+    outputPath: config.outputPath,
+    maxIterations: config.maxIterations,
+    timeoutMs: config.timeoutMs,
+    pollIntervalMs: config.pollIntervalMs,
+    prompts: config.prompts,
+    onAskUser: config.onAskUser,
   }
 
-  if (!approved && iteration >= config.maxIterations) {
-    printMaxIterationsReached(config.maxIterations)
-  }
+  const engine = new LoopEngine(engineConfig, targets)
+  const result = await engine.run()
 
-  // 最終コードを保存
-  if (currentCode && config.outputPath) {
-    try {
-      await writeFile(config.outputPath, currentCode, 'utf-8')
-      printSaved(config.outputPath)
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e)
-      printError(`ファイル保存に失敗: ${message}`)
-    }
-  }
+  if (!result.ok) return result
 
-  // 一時ファイルのクリーンアップ
-  await cleanupTempFiles()
-
-  return ok({
-    finalCode: currentCode,
-    iterations,
-    approved,
-    totalIterations: iteration,
-  })
+  return ok(toLoopResult(result.value))
 }
 
 /** エージェントループを実行する（セッション作成 → CLI起動 → ループ → 結果返却） */
@@ -275,7 +148,7 @@ export async function runAgentLoop(
     return err(codexReady.error)
   }
 
-  // ループ実行
+  // ループ実行（autoモードは onAskUser なし → 自動終了）
   const result = await runLoop(config, { claude: claudeTarget, codex: codexTarget })
 
   // イテレーション履歴をログファイルに保存
