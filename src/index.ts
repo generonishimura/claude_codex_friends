@@ -3,8 +3,25 @@ import { parseMode, DEFAULTS } from './config/index.js'
 import { runAgentLoop } from './orchestrator/agent-loop.js'
 import { launchThreePane } from './launcher.js'
 import { startRepl } from './repl/index.js'
-import { waitForCompletion } from './services/tmux.service.js'
+import { waitForCompletion, destroySession, cleanupTempFiles } from './services/tmux.service.js'
 import { printError } from './ui/terminal.js'
+
+/** Graceful shutdown: Ctrl+C 時にリソースをクリーンアップする */
+function setupGracefulShutdown(sessionName: string, keepSession: boolean): void {
+  let shuttingDown = false
+  const handler = async () => {
+    if (shuttingDown) return
+    shuttingDown = true
+    console.log('\n中断を検知しました。クリーンアップ中...')
+    await cleanupTempFiles()
+    if (!keepSession) {
+      await destroySession(sessionName).catch(() => {})
+    }
+    process.exit(130)
+  }
+  process.on('SIGINT', handler)
+  process.on('SIGTERM', handler)
+}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
@@ -19,6 +36,7 @@ async function main(): Promise<void> {
     case 'repl': {
       // ランチャーからの自己呼び出し: CLIの起動完了を待ってからREPL開始
       const sessionName = DEFAULTS.sessionName
+      setupGracefulShutdown(sessionName, true)
       const claudeTarget = `${sessionName}:0.1`
       const codexTarget = `${sessionName}:0.2`
 
@@ -51,6 +69,7 @@ async function main(): Promise<void> {
     }
 
     case 'auto': {
+      setupGracefulShutdown(mode.config.sessionName, mode.config.keepSession ?? false)
       const result = await runAgentLoop(mode.config)
       if (!result.ok) {
         process.exit(1)
