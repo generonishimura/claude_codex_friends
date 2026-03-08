@@ -11,6 +11,7 @@ import {
   shouldContinueLoop,
   isApproved as checkApproved,
   extractCodeFromResponse,
+  resolveFileExtension,
 } from '../domain/loop.rules.js'
 import {
   checkTmuxAvailable,
@@ -124,7 +125,7 @@ export async function runLoop(
     currentCode = extractedCode
 
     // コードを一時ファイルに保存（CLIからファイルパスで参照可能にする）
-    const ext = config.language === 'python' ? 'py' : config.language === 'go' ? 'go' : 'ts'
+    const ext = resolveFileExtension(config.language)
     codeFilePath = await saveCodeToTempFile(currentCode, `code_iter${iteration}.${ext}`)
 
     // --- Codex にレビュー送信 ---

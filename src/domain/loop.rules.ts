@@ -1,5 +1,29 @@
 import type { LoopState } from './loop.types.js'
 
+/** 言語名からファイル拡張子を解決する */
+const LANGUAGE_EXTENSIONS: Record<string, string> = {
+  typescript: 'ts',
+  javascript: 'js',
+  python: 'py',
+  go: 'go',
+  rust: 'rs',
+  java: 'java',
+  ruby: 'rb',
+  c: 'c',
+  cpp: 'cpp',
+  csharp: 'cs',
+  swift: 'swift',
+  kotlin: 'kt',
+  php: 'php',
+  shell: 'sh',
+  bash: 'sh',
+}
+
+export function resolveFileExtension(language?: string): string {
+  if (!language) return 'txt'
+  return LANGUAGE_EXTENSIONS[language.toLowerCase()] ?? 'txt'
+}
+
 /** ANSIエスケープコードを除去する */
 export function stripAnsiCodes(text: string): string {
   // eslint-disable-next-line no-control-regex
@@ -51,17 +75,6 @@ export function buildReviewPrompt(task: string, codeFilePath: string, customTemp
   return `${codeFilePath} のコードをレビューしてください。タスク: ${task} 問題がなければ "APPROVED" と記載してください。修正が必要な場合は具体的な改善点を記載してください。`
 }
 
-/** コードレビュープロンプト(インライン版)を構築する */
-export function buildReviewPromptInline(task: string, code: string): string {
-  return [
-    '以下のコードをレビューしてください。',
-    `\nタスク: ${task}`,
-    `\n--- CODE START ---\n${code}\n--- CODE END ---`,
-    '\n問題がなければ "APPROVED" と記載してください。',
-    '修正が必要な場合は具体的な改善点を記載してください。',
-  ].join('\n')
-}
-
 /** ループを継続すべきか判定する */
 export function shouldContinueLoop(state: LoopState): boolean {
   if (state.approved) return false
@@ -100,6 +113,23 @@ export function isApproved(reviewText: string): boolean {
   return APPROVAL_PATTERNS.some(pattern => pattern.test(reviewText))
 }
 
+/** CLI応答完了のプロンプトパターン */
+const COMPLETION_PATTERNS = [
+  /❯/,                  // Claude Code の入力プロンプト
+  /›/,                  // Codex の入力プロンプト (U+203A)
+  />\s*$/,              // 一般的なCLI入力プロンプト
+  /\$\s*$/,             // シェルプロンプトフォールバック
+  /\?\s+for shortcuts/, // Claude Code のヘルプヒント
+]
+
+/** ペインの出力が CLI の応答完了状態かどうか判定する */
+export function isCompletionState(paneOutput: string): boolean {
+  const cleaned = stripAnsiCodes(paneOutput).trimEnd()
+  // 最後の数行だけチェック（中間出力の誤検知を防ぐ）
+  const lastLines = cleaned.split('\n').slice(-5).join('\n')
+  return COMPLETION_PATTERNS.some(pattern => pattern.test(lastLines))
+}
+
 /** レスポンスからコードブロックを抽出する */
 export function extractCodeFromResponse(rawOutput: string): string | null {
   const cleaned = stripAnsiCodes(rawOutput)
@@ -123,22 +153,6 @@ export function extractCodeFromResponse(rawOutput: string): string | null {
   if (markerMatch) {
     const code = markerMatch[1].trim()
     if (code.length > 0) return code
-  }
-
-  // 3. フォールバック: プロンプトと空行を除いた残りのテキストをコードとして扱う
-  const lines = cleaned.split('\n')
-  const codeLines = lines.filter(line => {
-    const trimmed = line.trim()
-    // 空行、プロンプト行、装飾行を除外
-    if (!trimmed) return false
-    if (/^[❯›>$]\s*/.test(trimmed)) return false
-    if (/^[─═╭╰│┌└├┤┬┴┼╮╯┐┘]+$/.test(trimmed)) return false
-    if (/^\?\s+for shortcuts/.test(trimmed)) return false
-    return true
-  })
-
-  if (codeLines.length > 0) {
-    return codeLines.join('\n').trim()
   }
 
   return null
