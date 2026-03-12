@@ -1,5 +1,7 @@
 /** ターミナルUI表示ユーティリティ */
 
+import type { AskUserContext } from '../domain/engine.types.js'
+
 const COLORS = {
   reset: '\x1b[0m',
   bold: '\x1b[1m',
@@ -74,11 +76,47 @@ ${COLORS.cyan}コマンド一覧:${COLORS.reset}
   ${COLORS.bold}<テキスト>${COLORS.reset}         タスクとしてClaude→Codexの自動ループを開始
   ${COLORS.bold}@claude <msg>${COLORS.reset}     Claudeペインに直接テキスト送信
   ${COLORS.bold}@codex <msg>${COLORS.reset}      Codexペインに直接テキスト送信
+
+${COLORS.cyan}ループ制御（ループ一時停止中に使用）:${COLORS.reset}
+  ${COLORS.bold}/continue [n]${COLORS.reset}     ループを追加 n 回継続（デフォルト: 現在の最大回数）
+  ${COLORS.bold}/accept${COLORS.reset}            現在のコードをそのまま承認して終了
+  ${COLORS.bold}/reject${COLORS.reset}            コードを破棄して終了
+
+${COLORS.cyan}情報・管理:${COLORS.reset}
+  ${COLORS.bold}/save [path]${COLORS.reset}       前回の結果をファイルに保存
   ${COLORS.bold}/status${COLORS.reset}            両ペインの現在状態を表示
   ${COLORS.bold}/history${COLORS.reset}           実行履歴を表示
   ${COLORS.bold}/last${COLORS.reset}              前回の実行結果を表示
   ${COLORS.bold}/help${COLORS.reset}              このヘルプを表示
   ${COLORS.bold}/exit${COLORS.reset}              セッション終了
+`)
+}
+
+export function printAskUser(context: AskUserContext): void {
+  const reasonLabels: Record<string, string> = {
+    iteration_limit: `最大イテレーション (${context.maxIterations}回) に到達しました`,
+    stuck: '同じ指摘が繰り返されています（堂々巡り検出）',
+    error_recovery: 'エラーが発生しました',
+  }
+
+  console.log(`
+${COLORS.yellow}${COLORS.bold}--- ループ一時停止 ---${COLORS.reset}
+${COLORS.yellow}理由: ${reasonLabels[context.reason] ?? context.reason}${COLORS.reset}
+${COLORS.dim}現在 ${context.iteration}/${context.maxIterations} イテレーション完了${COLORS.reset}
+`)
+
+  if (context.lastReview) {
+    const preview = context.lastReview.length > 200
+      ? context.lastReview.slice(0, 200) + '...'
+      : context.lastReview
+    console.log(`${COLORS.dim}直近のレビュー:${COLORS.reset}`)
+    console.log(`${COLORS.dim}${preview}${COLORS.reset}\n`)
+  }
+
+  console.log(`${COLORS.cyan}選択肢:${COLORS.reset}
+  ${COLORS.bold}/continue [n]${COLORS.reset}  ループを n 回追加して継続
+  ${COLORS.bold}/accept${COLORS.reset}         現在のコードで完了
+  ${COLORS.bold}/reject${COLORS.reset}         破棄して終了
 `)
 }
 

@@ -6,8 +6,8 @@ export const DEFAULTS = {
   timeoutMs: 5 * 60 * 1000,     // 5分
   pollIntervalMs: 3000,           // 3秒
   sessionName: 'ccf',
-  /** CLI起動待機時間 (ms) — Claude/Codex CLIの起動完了までの初回ウェイト */
-  cliStartupDelayMs: 15000,
+  /** CLI起動待機の初回ウェイト (ms) — 最低限の起動猶予後にポーリング開始 */
+  cliStartupDelayMs: 2000,
   /** プロンプト送信時のチャンクサイズ (文字数) — TUIバッファ制限対策 */
   chunkSize: 200,
   /** チャンク間ディレイ (ms) */

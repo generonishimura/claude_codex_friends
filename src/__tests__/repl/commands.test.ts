@@ -65,6 +65,58 @@ describe('parseCommand', () => {
     })
   })
 
+  describe('ループ制御コマンド', () => {
+    it('/continue でデフォルト回数の継続コマンドと解釈する', () => {
+      const result = parseCommand('/continue')
+      expect(result).toEqual({ type: 'continue', payload: undefined })
+    })
+
+    it('/continue 3 で回数指定の継続コマンドと解釈する', () => {
+      const result = parseCommand('/continue 3')
+      expect(result).toEqual({ type: 'continue', payload: 3 })
+    })
+
+    it('/continue に数字以外が続く場合はデフォルト回数', () => {
+      const result = parseCommand('/continue abc')
+      expect(result).toEqual({ type: 'continue', payload: undefined })
+    })
+
+    it('/continue 0 はデフォルト回数として扱う', () => {
+      const result = parseCommand('/continue 0')
+      expect(result).toEqual({ type: 'continue', payload: undefined })
+    })
+
+    it('/continue -1 はデフォルト回数として扱う', () => {
+      const result = parseCommand('/continue -1')
+      expect(result).toEqual({ type: 'continue', payload: undefined })
+    })
+
+    it('/continue 3abc はデフォルト回数として扱う', () => {
+      const result = parseCommand('/continue 3abc')
+      expect(result).toEqual({ type: 'continue', payload: undefined })
+    })
+
+    it('/accept で現在のコード承認コマンドと解釈する', () => {
+      const result = parseCommand('/accept')
+      expect(result).toEqual({ type: 'accept' })
+    })
+
+    it('/reject で破棄コマンドと解釈する', () => {
+      const result = parseCommand('/reject')
+      expect(result).toEqual({ type: 'reject' })
+    })
+
+    it('/save でデフォルトパス保存コマンドと解釈する', () => {
+      const result = parseCommand('/save')
+      expect(result).toEqual({ type: 'save', payload: undefined })
+    })
+
+    it('/save path で指定パス保存コマンドと解釈する', () => {
+      const result = parseCommand('/save output.ts')
+      expect(result).toEqual({ type: 'save', payload: 'output.ts' })
+    })
+  })
+
   describe('空入力', () => {
     it('空文字列はタスクとして空payloadを返す', () => {
       const result = parseCommand('')
