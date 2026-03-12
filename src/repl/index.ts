@@ -47,7 +47,12 @@ function askUserDecision(rl: Interface, context: AskUserContext): Promise<UserDe
         switch (cmd.type) {
           case 'continue': {
             const n = cmd.payload ?? context.maxIterations
-            resolve({ type: 'continue', additionalIterations: n })
+            if (n >= 1) {
+              resolve({ type: 'continue', additionalIterations: n })
+              return
+            }
+            console.log('  /continue の引数は1以上の正の整数を指定してください')
+            ask()
             return
           }
           case 'accept':

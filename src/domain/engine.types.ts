@@ -9,7 +9,7 @@ export type EnginePhase =
   | 'reviewing'   // Codex がレビュー中
   | 'judging'     // レビュー結果を判定中
   | 'ask-user'    // ユーザーの判断を待機中
-  | 'completed'   // 正常完了（approved）
+  | 'completed'   // 正常完了（approved または auto モード終了）
   | 'aborted'     // ユーザーが破棄
   | 'error'       // エラーで停止
 

@@ -81,6 +81,21 @@ describe('parseCommand', () => {
       expect(result).toEqual({ type: 'continue', payload: undefined })
     })
 
+    it('/continue 0 はデフォルト回数として扱う', () => {
+      const result = parseCommand('/continue 0')
+      expect(result).toEqual({ type: 'continue', payload: undefined })
+    })
+
+    it('/continue -1 はデフォルト回数として扱う', () => {
+      const result = parseCommand('/continue -1')
+      expect(result).toEqual({ type: 'continue', payload: undefined })
+    })
+
+    it('/continue 3abc はデフォルト回数として扱う', () => {
+      const result = parseCommand('/continue 3abc')
+      expect(result).toEqual({ type: 'continue', payload: undefined })
+    })
+
     it('/accept で現在のコード承認コマンドと解釈する', () => {
       const result = parseCommand('/accept')
       expect(result).toEqual({ type: 'accept' })

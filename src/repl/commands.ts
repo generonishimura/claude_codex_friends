@@ -22,8 +22,8 @@ export function parseCommand(input: string): ReplCommand {
 
   if (trimmed.startsWith('/continue')) {
     const arg = trimmed.slice('/continue'.length).trim()
-    const n = parseInt(arg, 10)
-    return { type: 'continue', payload: Number.isNaN(n) ? undefined : n }
+    const isPositiveInteger = /^[1-9]\d*$/.test(arg)
+    return { type: 'continue', payload: isPositiveInteger ? Number(arg) : undefined }
   }
 
   if (trimmed.startsWith('/save')) {

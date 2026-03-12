@@ -66,7 +66,7 @@ describe('detectStuck', () => {
     expect(detectStuck(reviews)).toBe(false)
   })
 
-  it('空白やケースの違いを正規化して比較する', () => {
+  it('空白の違いを正規化して比較する', () => {
     const reviews = [
       '  エラーハンドリング が不足  ',
       'エラーハンドリング が不足',

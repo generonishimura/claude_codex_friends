@@ -87,34 +87,38 @@ export class LoopEngine extends EventEmitter {
 
   /** エンジンを実行する */
   async run(): Promise<Result<EngineResult, DomainError>> {
-    this.transition('generating')
+    try {
+      this.transition('generating')
 
-    while (this.state.phase === 'generating') {
-      const iterationResult = await this.executeIteration()
-      if (!iterationResult.ok) {
-        this.transition('error')
-        return iterationResult
+      while (this.state.phase === 'generating') {
+        const iterationResult = await this.executeIteration()
+        if (!iterationResult.ok) {
+          this.transition('error')
+          return iterationResult
+        }
+
+        // 判定フェーズ
+        this.transition('judging')
+        const decision = decideNextPhase(this.state)
+
+        if (decision.phase === 'completed') {
+          printApproved()
+          this.transition('completed')
+        } else if (decision.phase === 'ask-user') {
+          const userResult = await this.handleAskUser(decision.reason!)
+          if (!userResult.ok) return userResult
+          // handleAskUser が state.phase を更新済み
+        } else {
+          // generating に戻って次のイテレーションへ
+          this.transition('generating')
+        }
       }
 
-      // 判定フェーズ
-      this.transition('judging')
-      const decision = decideNextPhase(this.state)
-
-      if (decision.phase === 'completed') {
-        printApproved()
-        this.transition('completed')
-      } else if (decision.phase === 'ask-user') {
-        const userResult = await this.handleAskUser(decision.reason!)
-        if (!userResult.ok) return userResult
-        // handleAskUser が state.phase を更新済み
-      } else {
-        // generating に戻って次のイテレーションへ
-        this.transition('generating')
-      }
+      // 最終処理
+      return this.finalize()
+    } finally {
+      await cleanupTempFiles()
     }
-
-    // 最終処理
-    return this.finalize()
   }
 
   /** 1イテレーションを実行する */
@@ -167,7 +171,12 @@ export class LoopEngine extends EventEmitter {
 
     this.state.currentCode = extractedCode
     const ext = resolveFileExtension(this.config.language)
-    this.state.codeFilePath = await saveCodeToTempFile(extractedCode, `code_iter${this.state.iteration}.${ext}`)
+    try {
+      this.state.codeFilePath = await saveCodeToTempFile(extractedCode, `code_iter${this.state.iteration}.${ext}`)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      return err({ code: 'TEMP_FILE_SAVE_FAILED', message: `一時ファイルの保存に失敗: ${message}` })
+    }
 
     this.emit('event', {
       type: 'code_generated',
@@ -293,8 +302,6 @@ export class LoopEngine extends EventEmitter {
       }
     }
 
-    await cleanupTempFiles()
-
     const result: EngineResult = {
       finalCode: isAborted ? null : this.state.currentCode,
       iterations: this.state.iterations,
@@ -319,7 +326,10 @@ export class LoopEngine extends EventEmitter {
 
 /** ファイルパスに .draft サフィックスを追加する */
 export function addDraftSuffix(filePath: string): string {
-  const lastDot = filePath.lastIndexOf('.')
-  if (lastDot === -1) return `${filePath}.draft`
-  return `${filePath.slice(0, lastDot)}.draft${filePath.slice(lastDot)}`
+  const lastSlash = filePath.lastIndexOf('/')
+  const fileName = lastSlash === -1 ? filePath : filePath.slice(lastSlash + 1)
+  const dir = lastSlash === -1 ? '' : filePath.slice(0, lastSlash + 1)
+  const dotIndex = fileName.lastIndexOf('.')
+  if (dotIndex === -1) return `${filePath}.draft`
+  return `${dir}${fileName.slice(0, dotIndex)}.draft${fileName.slice(dotIndex)}`
 }
