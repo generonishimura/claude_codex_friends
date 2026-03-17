@@ -68,6 +68,11 @@ describe('parseCommand', () => {
       const result = parseCommand('/last --full')
       expect(result).toEqual({ type: 'last', payload: 'full' })
     })
+
+    it('/lastly はlast型ではなくtask型として扱う', () => {
+      const result = parseCommand('/lastly')
+      expect(result).toEqual({ type: 'task', payload: '/lastly' })
+    })
   })
 
   describe('ループ制御コマンド', () => {

@@ -14,7 +14,7 @@ export function parseCommand(input: string): ReplCommand {
 
   if (trimmed === '/status') return { type: 'status' }
   if (trimmed === '/history') return { type: 'history' }
-  if (trimmed.startsWith('/last')) {
+  if (trimmed === '/last' || trimmed.startsWith('/last ')) {
     const arg = trimmed.slice('/last'.length).trim()
     return { type: 'last', payload: arg === '--full' ? 'full' : undefined }
   }
