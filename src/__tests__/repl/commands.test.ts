@@ -61,7 +61,12 @@ describe('parseCommand', () => {
 
     it('/last で前回結果表示コマンドと解釈する', () => {
       const result = parseCommand('/last')
-      expect(result).toEqual({ type: 'last' })
+      expect(result).toEqual({ type: 'last', payload: undefined })
+    })
+
+    it('/last --full でfullモードのlastコマンドと解釈する', () => {
+      const result = parseCommand('/last --full')
+      expect(result).toEqual({ type: 'last', payload: 'full' })
     })
   })
 

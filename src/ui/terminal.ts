@@ -86,7 +86,7 @@ ${COLORS.cyan}情報・管理:${COLORS.reset}
   ${COLORS.bold}/save [path]${COLORS.reset}       前回の結果をファイルに保存
   ${COLORS.bold}/status${COLORS.reset}            両ペインの現在状態を表示
   ${COLORS.bold}/history${COLORS.reset}           実行履歴を表示
-  ${COLORS.bold}/last${COLORS.reset}              前回の実行結果を表示
+  ${COLORS.bold}/last [--full]${COLORS.reset}      前回の実行結果を表示（--full で全文）
   ${COLORS.bold}/help${COLORS.reset}              このヘルプを表示
   ${COLORS.bold}/exit${COLORS.reset}              セッション終了
 `)
@@ -135,7 +135,19 @@ export function printReplHistory(entries: Array<{ task: string; approved: boolea
   console.log()
 }
 
-export function printReplLastResult(result: { task: string; approved: boolean; iterations: number; finalCode: string | null } | null): void {
+/** コードを指定行数で省略する */
+export function truncateCode(code: string, maxLines: number): string {
+  const lines = code.split('\n')
+  if (lines.length <= maxLines) return code
+  const truncated = lines.slice(0, maxLines).join('\n')
+  const remaining = lines.length - maxLines
+  return `${truncated}\n${COLORS.dim}...省略 (残り${remaining}行。/last --full で全文表示)${COLORS.reset}`
+}
+
+export function printReplLastResult(
+  result: { task: string; approved: boolean; iterations: number; finalCode: string | null } | null,
+  fullMode: boolean = false,
+): void {
   if (!result) {
     console.log(`${COLORS.dim}前回の実行結果がありません。${COLORS.reset}`)
     return
@@ -151,7 +163,7 @@ ${COLORS.cyan}${COLORS.bold}前回の実行結果:${COLORS.reset}
 `)
   if (result.finalCode) {
     console.log(`${COLORS.dim}--- コード ---${COLORS.reset}`)
-    console.log(result.finalCode)
+    console.log(fullMode ? result.finalCode : truncateCode(result.finalCode, 10))
     console.log(`${COLORS.dim}--- ここまで ---${COLORS.reset}\n`)
   }
 }
