@@ -1,6 +1,7 @@
 import { createInterface, type Interface } from 'node:readline'
 import { writeFile } from 'node:fs/promises'
 import { parseCommand } from './commands.js'
+import { completer } from './completer.js'
 import { LoopEngine, addDraftSuffix } from '../orchestrator/loop-engine.js'
 import type { LoopTargets } from '../orchestrator/loop-engine.js'
 import type { UserDecision, AskUserContext } from '../domain/engine.types.js'
@@ -76,6 +77,7 @@ export async function startRepl(options: ReplOptions): Promise<void> {
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
+    completer,
   })
 
   const history: HistoryEntry[] = []
