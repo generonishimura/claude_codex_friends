@@ -14,6 +14,7 @@ export function createInitialState(maxIterations: number): EngineState {
     approved: false,
     askReason: null,
     lastReviews: [],
+    lastError: null,
   }
 }
 

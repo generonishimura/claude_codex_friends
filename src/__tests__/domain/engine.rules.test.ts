@@ -19,6 +19,7 @@ describe('createInitialState', () => {
     expect(state.approved).toBe(false)
     expect(state.askReason).toBeNull()
     expect(state.lastReviews).toEqual([])
+    expect(state.lastError).toBeNull()
   })
 })
 
@@ -86,6 +87,7 @@ describe('decideNextPhase', () => {
     approved: false,
     askReason: null,
     lastReviews: [],
+    lastError: null,
   }
 
   it('approved なら completed に遷移する', () => {

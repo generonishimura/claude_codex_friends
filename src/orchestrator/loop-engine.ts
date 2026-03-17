@@ -93,8 +93,9 @@ export class LoopEngine extends EventEmitter {
       while (this.state.phase === 'generating') {
         const iterationResult = await this.executeIteration()
         if (!iterationResult.ok) {
+          this.state.lastError = iterationResult.error.message
           this.transition('error')
-          return iterationResult
+          return this.finalize()
         }
 
         // 判定フェーズ
@@ -308,6 +309,7 @@ export class LoopEngine extends EventEmitter {
       approved: this.state.approved,
       totalIterations: this.state.iteration,
       userAccepted,
+      ...(this.state.lastError != null ? { errorMessage: this.state.lastError } : {}),
     }
 
     this.emit('event', { type: 'completed', result } satisfies EngineEvent)

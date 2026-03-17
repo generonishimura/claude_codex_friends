@@ -39,6 +39,8 @@ export interface EngineState {
   askReason: AskReason | null
   /** 直近のレビューテキスト（stuck 検出用） */
   lastReviews: string[]
+  /** 直近のエラーメッセージ */
+  lastError: string | null
 }
 
 /** エンジンが発行するイベント */
@@ -67,4 +69,6 @@ export interface EngineResult {
   totalIterations: number
   /** ユーザーが accept で終了したか */
   userAccepted: boolean
+  /** エラーメッセージ（phase が error の時のみ） */
+  errorMessage?: string
 }
