@@ -1,34 +1,15 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { writeFile, mkdir, rm } from 'node:fs/promises'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import type { Result, DomainError } from '../domain/types.js'
 import { ok, err } from '../domain/types.js'
 import { ERRORS } from '../domain/errors.js'
 import { stripAnsiCodes, isCompletionState } from '../domain/loop.rules.js'
 import { DEFAULTS } from '../config/index.js'
 
+// 後方互換: file.service.ts から re-export
+export { saveCodeToTempFile, cleanupTempFiles } from './file.service.js'
+
 const execFileAsync = promisify(execFile)
-
-const CCF_TMP_DIR = join(tmpdir(), 'ccf')
-
-/** コードを一時ファイルに保存する */
-export async function saveCodeToTempFile(code: string, filename: string): Promise<string> {
-  await mkdir(CCF_TMP_DIR, { recursive: true })
-  const filePath = join(CCF_TMP_DIR, filename)
-  await writeFile(filePath, code, 'utf-8')
-  return filePath
-}
-
-/** 一時ファイルディレクトリを削除する */
-export async function cleanupTempFiles(): Promise<void> {
-  try {
-    await rm(CCF_TMP_DIR, { recursive: true, force: true })
-  } catch {
-    // クリーンアップ失敗は無視（致命的ではない）
-  }
-}
 
 /** tmux コマンドを実行する */
 async function tmux(...args: string[]): Promise<Result<string>> {
