@@ -130,6 +130,27 @@ export function isCompletionState(paneOutput: string): boolean {
   return COMPLETION_PATTERNS.some(pattern => pattern.test(lastLines))
 }
 
+/** CLIのプロンプト行やアーティファクト行のパターン（レビュー抽出時に除去する） */
+const CLI_NOISE_PATTERNS = [
+  /^[❯›>$%#]\s*$/,                  // プロンプト記号のみの行
+  /^[❯›]\s+\S/,                     // › or ❯ に続くユーザー入力行（送信プロンプト）
+  /^\s*\?\s+for\s+shortcuts/,       // Claude Code のヒント行
+  /Welcome to .* CLI/i,             // CLI起動メッセージ
+  /^[❯›>]\s*(codex|claude)\s*$/i,   // CLI名のみの行
+]
+
+/** capture-pane の生出力からレビュー本文を抽出する */
+export function extractReviewFromResponse(rawOutput: string): string {
+  const cleaned = stripAnsiCodes(rawOutput)
+  const lines = cleaned.split('\n')
+
+  const filteredLines = lines.filter(line => {
+    return !CLI_NOISE_PATTERNS.some(pattern => pattern.test(line))
+  })
+
+  return filteredLines.join('\n').trim()
+}
+
 /** レスポンスからコードブロックを抽出する */
 export function extractCodeFromResponse(rawOutput: string): string | null {
   const cleaned = stripAnsiCodes(rawOutput)
