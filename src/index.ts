@@ -6,6 +6,14 @@ import { startRepl } from './repl/index.js'
 import { waitForCompletion, destroySession, cleanupTempFiles } from './services/tmux.service.js'
 import { printError } from './ui/terminal.js'
 
+/** リソースをクリーンアップする */
+export async function cleanup(sessionName: string, keepSession: boolean): Promise<void> {
+  await cleanupTempFiles()
+  if (!keepSession) {
+    await destroySession(sessionName).catch(() => {})
+  }
+}
+
 /** Graceful shutdown: Ctrl+C 時にリソースをクリーンアップする */
 function setupGracefulShutdown(sessionName: string, keepSession: boolean): void {
   let shuttingDown = false
@@ -13,10 +21,7 @@ function setupGracefulShutdown(sessionName: string, keepSession: boolean): void 
     if (shuttingDown) return
     shuttingDown = true
     console.log('\n中断を検知しました。クリーンアップ中...')
-    await cleanupTempFiles()
-    if (!keepSession) {
-      await destroySession(sessionName).catch(() => {})
-    }
+    await cleanup(sessionName, keepSession)
     process.exit(130)
   }
   process.on('SIGINT', handler)
