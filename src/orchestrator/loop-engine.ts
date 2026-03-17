@@ -95,7 +95,7 @@ export class LoopEngine extends EventEmitter {
         if (!iterationResult.ok) {
           this.state.lastError = iterationResult.error.message
           this.transition('error')
-          return this.finalize()
+          return err(iterationResult.error)
         }
 
         // 判定フェーズ
@@ -287,10 +287,11 @@ export class LoopEngine extends EventEmitter {
   /** 最終結果を組み立てる */
   private async finalize(): Promise<Result<EngineResult, DomainError>> {
     const isAborted = this.state.phase === 'aborted'
+    const isError = this.state.phase === 'error'
     const userAccepted = this.state.approved && this.state.phase === 'completed' && !this.state.iterations.some(i => i.approved)
 
-    // コード保存（aborted 時は保存しない）
-    if (!isAborted && this.state.currentCode && this.config.outputPath) {
+    // コード保存（aborted / error 時は保存しない）
+    if (!isAborted && !isError && this.state.currentCode && this.config.outputPath) {
       const savePath = this.state.approved
         ? this.config.outputPath
         : addDraftSuffix(this.config.outputPath)
@@ -304,7 +305,7 @@ export class LoopEngine extends EventEmitter {
     }
 
     const result: EngineResult = {
-      finalCode: isAborted ? null : this.state.currentCode,
+      finalCode: isAborted || isError ? null : this.state.currentCode,
       iterations: this.state.iterations,
       approved: this.state.approved,
       totalIterations: this.state.iteration,

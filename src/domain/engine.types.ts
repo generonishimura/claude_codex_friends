@@ -69,6 +69,6 @@ export interface EngineResult {
   totalIterations: number
   /** ユーザーが accept で終了したか */
   userAccepted: boolean
-  /** エラーメッセージ（phase が error の時のみ） */
+  /** エラー発生時に設定されるメッセージ */
   errorMessage?: string
 }
