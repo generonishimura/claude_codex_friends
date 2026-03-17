@@ -7,10 +7,10 @@ import { waitForCompletion, destroySession, cleanupTempFiles } from './services/
 import { printError } from './ui/terminal.js'
 
 /** リソースをクリーンアップする */
-export async function cleanup(sessionName: string, keepSession: boolean): Promise<void> {
+async function cleanup(sessionName: string, keepSession: boolean): Promise<void> {
   await cleanupTempFiles()
   if (!keepSession) {
-    await destroySession(sessionName).catch(() => {})
+    await destroySession(sessionName)
   }
 }
 
