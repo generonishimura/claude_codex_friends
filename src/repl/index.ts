@@ -105,6 +105,7 @@ export async function startRepl(options: ReplOptions): Promise<void> {
             {
               task: command.payload,
               language: settings.language,
+              outputPath: settings.outputPath,
               maxIterations: settings.maxIterations,
               timeoutMs: options.timeoutMs,
               pollIntervalMs: options.pollIntervalMs,

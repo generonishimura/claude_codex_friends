@@ -31,7 +31,7 @@ export function parseCommand(input: string): ReplCommand {
     return { type: 'save', payload: arg || undefined }
   }
 
-  if (trimmed.startsWith('/set')) {
+  if (trimmed === '/set' || trimmed.startsWith('/set ')) {
     const parts = trimmed.slice('/set'.length).trim().split(/\s+/)
     if (parts.length >= 2 && parts[0]) {
       return { type: 'set', payload: { key: parts[0], value: parts.slice(1).join(' ') } }

@@ -133,6 +133,11 @@ describe('parseCommand', () => {
       expect(result).toEqual({ type: 'set', payload: { key: 'output', value: 'result.ts' } })
     })
 
+    it('/settings はset型ではなくtask型として扱う', () => {
+      const result = parseCommand('/settings')
+      expect(result).toEqual({ type: 'task', payload: '/settings' })
+    })
+
     it('/set のみで設定表示モード (payload null)', () => {
       const result = parseCommand('/set')
       expect(result).toEqual({ type: 'set', payload: null })
