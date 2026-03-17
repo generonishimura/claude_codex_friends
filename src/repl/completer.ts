@@ -9,7 +9,6 @@ const COMMANDS = [
   '/reject',
   '/continue',
   '/save',
-  '/set',
 ]
 
 const AT_COMMANDS = [
