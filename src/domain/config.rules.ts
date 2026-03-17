@@ -17,8 +17,8 @@ export function validateNumericOptions(options: NumericOptions): Result<void, Do
   ]
 
   for (const [name, value] of checks) {
-    if (isNaN(value) || value <= 0) {
-      return err(ERRORS.INVALID_CONFIG(`${name} は1以上の正の数値を指定してください (現在値: ${value})`))
+    if (!Number.isInteger(value) || value < 1) {
+      return err(ERRORS.INVALID_CONFIG(`${name} は1以上の正の整数を指定してください (現在値: ${value})`))
     }
   }
 

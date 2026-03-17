@@ -15,6 +15,14 @@ describe('validateNumericOptions', () => {
       const result = validateNumericOptions({ maxIterations: -3, timeoutMs: 5000, pollIntervalMs: 3000 })
       expect(result.ok).toBe(false)
     })
+    it('小数(0.5)は無効', () => {
+      const result = validateNumericOptions({ maxIterations: 0.5, timeoutMs: 5000, pollIntervalMs: 3000 })
+      expect(result.ok).toBe(false)
+    })
+    it('小数(2.5)は無効', () => {
+      const result = validateNumericOptions({ maxIterations: 2.5, timeoutMs: 5000, pollIntervalMs: 3000 })
+      expect(result.ok).toBe(false)
+    })
   })
 
   describe('timeoutMs', () => {
