@@ -117,6 +117,33 @@ describe('parseCommand', () => {
     })
   })
 
+  describe('/set コマンド', () => {
+    it('/set language python でset型コマンドを返す', () => {
+      const result = parseCommand('/set language python')
+      expect(result).toEqual({ type: 'set', payload: { key: 'language', value: 'python' } })
+    })
+
+    it('/set max-iterations 10 でset型コマンドを返す', () => {
+      const result = parseCommand('/set max-iterations 10')
+      expect(result).toEqual({ type: 'set', payload: { key: 'max-iterations', value: '10' } })
+    })
+
+    it('/set output result.ts でset型コマンドを返す', () => {
+      const result = parseCommand('/set output result.ts')
+      expect(result).toEqual({ type: 'set', payload: { key: 'output', value: 'result.ts' } })
+    })
+
+    it('/set のみで設定表示モード (payload null)', () => {
+      const result = parseCommand('/set')
+      expect(result).toEqual({ type: 'set', payload: null })
+    })
+
+    it('/set keyのみ（値なし）でpayload null', () => {
+      const result = parseCommand('/set language')
+      expect(result).toEqual({ type: 'set', payload: null })
+    })
+  })
+
   describe('空入力', () => {
     it('空文字列はタスクとして空payloadを返す', () => {
       const result = parseCommand('')
