@@ -137,6 +137,19 @@ const CLI_NOISE_PATTERNS = [
   /^\s*\?\s+for\s+shortcuts/,       // Claude Code のヒント行
   /Welcome to .* CLI/i,             // CLI起動メッセージ
   /^[❯›>]\s*(codex|claude)\s*$/i,   // CLI名のみの行
+  // Codex TUI 枠線・ボックス描画
+  /^[╭╰┌└][─━═]/,                   // ボックス上端・下端
+  /^[│║]/,                           // ボックス側面
+  // プログレス・ステータスマーカー
+  /^\s*[•◇◆○●]\s/,                  // 箇条書きプログレス行
+  /^[└├]\s/,                         // ツリー表示行
+  // shell コマンドエコー
+  /^(unset|export|source)\s+\w+/,   // 環境変数操作
+  /^[a-zA-Z0-9_-]+\s+:[a-zA-Z0-9_/~].*\$\s/,  // ユーザー名:パス$ 形式のシェルプロンプト
+  // メタデータ・設定情報
+  /^\s*(model|directory):\s/i,       // CLI メタデータ行
+  // Tip・プロモーション
+  /^Tip:\s/i,                        // Tip メッセージ
 ]
 
 /** capture-pane の生出力からレビュー本文を抽出する */
@@ -149,6 +162,51 @@ export function extractReviewFromResponse(rawOutput: string): string {
   })
 
   return filteredLines.join('\n').trim()
+}
+
+/** ⏺マーカーから抽出した内容の末尾にある説明文を除去する */
+const EXPLANATION_LINE_PATTERNS = [
+  /^[\u3000-\u9FFF\uF900-\uFAFF]/, // 漢字・ひらがな・カタカナで始まる行（日本語散文）
+  /^\s*-\s+[^\s{(]/,               // "- 説明..." 形式のリスト（コード中のオブジェクトリテラルでない）
+  /^\s*\d+\.\s/,                    // "1. 説明..." 形式の番号付きリスト
+  /^\s*\S+[:：]\s*$/,                // "Point:" "ポイント:" のような見出し行
+]
+
+function isExplanationLine(line: string): boolean {
+  const trimmed = line.trim()
+  if (trimmed === '') return false
+  return EXPLANATION_LINE_PATTERNS.some(p => p.test(line))
+}
+
+function stripExplanationSuffix(text: string): string {
+  const lines = text.split('\n')
+
+  // 先頭から説明文・空行をスキップしてコード開始位置を見つける
+  let start = 0
+  while (start < lines.length) {
+    const trimmed = lines[start].trim()
+    if (trimmed === '' || isExplanationLine(lines[start])) {
+      start++
+      continue
+    }
+    break
+  }
+
+  // 末尾から説明文行を刈り取る
+  let end = lines.length
+  while (end > start) {
+    const trimmed = lines[end - 1].trim()
+    if (trimmed === '') {
+      end--
+      continue
+    }
+    if (isExplanationLine(lines[end - 1])) {
+      end--
+      continue
+    }
+    break
+  }
+  return lines.slice(start, end).join('\n').trim()
 }
 
 /** レスポンスからコードブロックを抽出する */
@@ -172,7 +230,9 @@ export function extractCodeFromResponse(rawOutput: string): string | null {
   // 2. フォールバック: Claude Code の ⏺ マーカー以降のコードを抽出
   const markerMatch = cleaned.match(/⏺\s*([\s\S]+?)(?:\n─|$)/)
   if (markerMatch) {
-    const code = markerMatch[1].trim()
+    const raw = markerMatch[1].trim()
+    // 説明文（日本語散文やリスト）が混入する場合、コードらしい行だけ抽出する
+    const code = stripExplanationSuffix(raw)
     if (code.length > 0) return code
   }
 
