@@ -6,6 +6,7 @@ import {
   shouldContinueLoop,
   isApproved,
   extractCodeFromResponse,
+  extractReviewFromResponse,
   stripAnsiCodes,
   isCompletionState,
   resolveFileExtension,
@@ -311,6 +312,95 @@ const x = 42
 `
     const code = extractCodeFromResponse(response)
     expect(code).toBe('const x = 42')
+  })
+
+  it('⏺マーカー後の説明文を含めない', () => {
+    const response = `⏺ 以下が追加すべきバリデーションコードです。
+
+  if (isNaN(maxIterations) || maxIterations <= 0) {
+    console.error('エラー')
+    process.exit(1)
+  }
+
+  ポイント:
+  - isNaN() で NaN を検出
+  - <= 0 で負数をチェック`
+    const code = extractCodeFromResponse(response)
+    expect(code).not.toContain('ポイント')
+    expect(code).not.toContain('isNaN() で NaN')
+    expect(code).toContain('isNaN(maxIterations)')
+  })
+})
+
+describe('extractReviewFromResponse', () => {
+  it('Codex TUIの枠線文字を除去する', () => {
+    const raw = `╭──────────────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.111.0)                          │
+│                                                       │
+│ model: gpt-5.3-codex medium /model to change         │
+│ directory: ~/workspace/util_lib/claude_codex_friends  │
+╰──────────────────────────────────────────────────────╯
+コードに問題があります。エラーハンドリングを追加してください。`
+    const review = extractReviewFromResponse(raw)
+    expect(review).not.toContain('╭')
+    expect(review).not.toContain('│')
+    expect(review).not.toContain('╰')
+    expect(review).not.toContain('OpenAI Codex')
+    expect(review).not.toContain('model:')
+    expect(review).toContain('エラーハンドリングを追加してください')
+  })
+
+  it('Codex のプログレスマーカー行を除去する', () => {
+    const raw = `• 依頼内容を確認しました。まず指定ファイルを確認します。
+• Explored
+└ Read code_iter1.ts, index.ts
+コードのバリデーションが不足しています。`
+    const review = extractReviewFromResponse(raw)
+    expect(review).not.toContain('依頼内容を確認しました')
+    expect(review).not.toContain('Explored')
+    expect(review).not.toContain('└ Read')
+    expect(review).toContain('バリデーションが不足しています')
+  })
+
+  it('shell コマンドエコー行を除去する', () => {
+    const raw = `unset CLAUDECODE && codex
+i-nishimura :util_lib/claude_codex_friends (main *)$ unset CLAUDECODE && codex
+APPROVED - コードは問題ありません。`
+    const review = extractReviewFromResponse(raw)
+    expect(review).not.toContain('unset CLAUDECODE')
+    expect(review).not.toContain('i-nishimura')
+    expect(review).toContain('APPROVED')
+  })
+
+  it('Tip/プロモーション行を除去する', () => {
+    const raw = `Tip: New Try the Codex App with 2x rate limits until April 2nd. Run 'codex app'
+バリデーションを追加してください。`
+    const review = extractReviewFromResponse(raw)
+    expect(review).not.toContain('Tip:')
+    expect(review).not.toContain('Codex App')
+    expect(review).toContain('バリデーションを追加してください')
+  })
+
+  it('メタデータ行を除去する', () => {
+    const raw = `model: gpt-5.3-codex medium /model to change
+directory: ~/workspace/util_lib/claude_codex_friends
+APPROVED`
+    const review = extractReviewFromResponse(raw)
+    expect(review).not.toContain('model:')
+    expect(review).not.toContain('directory:')
+    expect(review).toContain('APPROVED')
+  })
+
+  it('既存のノイズパターン（プロンプト記号、ヒント行）も引き続き除去する', () => {
+    const raw = `❯
+› codex
+  ? for shortcuts
+Welcome to Codex CLI v0.111.0
+レビュー結果: 問題ありません`
+    const review = extractReviewFromResponse(raw)
+    expect(review).toContain('レビュー結果: 問題ありません')
+    expect(review).not.toContain('Welcome')
+    expect(review).not.toContain('for shortcuts')
   })
 })
 
