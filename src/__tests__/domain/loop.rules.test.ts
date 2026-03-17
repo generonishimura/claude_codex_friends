@@ -473,7 +473,7 @@ describe('isCompletionState', () => {
     expect(isCompletionState(lines.join('\n'))).toBe(true)
   })
 
-  it('完了マーカーが6行目以降（last-5-lines の外）にしかない場合はfalse', () => {
+  it('完了マーカーが先頭行のみで末尾5行に含まれない場合はfalse', () => {
     const lines = [
       '❯ previous',  // 完了マーカーはここだけ
       'line 1',
@@ -506,9 +506,18 @@ describe('isCompletionState', () => {
     expect(isCompletionState(output)).toBe(true)
   })
 
-  it('マーカーなしの通常テキストのみはfalse', () => {
-    const output = 'This is just regular output\nwith multiple lines\nno markers here'
-    expect(isCompletionState(output)).toBe(false)
+  it('完了マーカーが末尾からちょうど5行目にある場合はtrue', () => {
+    const lines = [
+      'line 1',
+      'line 2',
+      'line 3',
+      '❯ ',        // 末尾から5行目
+      'line 5',
+      'line 6',
+      'line 7',
+      'line 8',
+    ]
+    expect(isCompletionState(lines.join('\n'))).toBe(true)
   })
 })
 
