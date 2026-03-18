@@ -456,6 +456,69 @@ describe('isCompletionState', () => {
     ]
     expect(isCompletionState(lines.join('\n'))).toBe(false)
   })
+
+  it('複数の完了パターンが同一行に混在しても完了と判定する', () => {
+    const output = 'some output\n❯ › > '
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('ANSIコードが完了マーカーを囲んでいても完了と判定する', () => {
+    const output = 'output\n\x1b[1m\x1b[36m❯\x1b[0m '
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('100行以上の長い出力でも末尾に完了マーカーがあれば完了と判定する', () => {
+    const lines = Array.from({ length: 100 }, (_, i) => `line ${i + 1}`)
+    lines.push('❯ ')
+    expect(isCompletionState(lines.join('\n'))).toBe(true)
+  })
+
+  it('完了マーカーが先頭行のみで末尾5行に含まれない場合はfalse', () => {
+    const lines = [
+      '❯ previous',  // 完了マーカーはここだけ
+      'line 1',
+      'line 2',
+      'line 3',
+      'line 4',
+      'line 5',
+      'still working...',
+    ]
+    expect(isCompletionState(lines.join('\n'))).toBe(false)
+  })
+
+  it('空行のみ + 完了マーカーで完了と判定する', () => {
+    const output = '\n\n\n❯ '
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('\\r\\n改行でも正しく判定する', () => {
+    const output = 'output done\r\n❯ '
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('"? for shortcuts" がANSIコードで囲まれていても完了と判定する', () => {
+    const output = 'some output\n\x1b[2m? for shortcuts\x1b[0m'
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('タブ文字 + マーカーでも完了と判定する', () => {
+    const output = 'output\n\t❯ '
+    expect(isCompletionState(output)).toBe(true)
+  })
+
+  it('完了マーカーが末尾からちょうど5行目にある場合はtrue', () => {
+    const lines = [
+      'line 1',
+      'line 2',
+      'line 3',
+      '❯ ',        // 末尾から5行目
+      'line 5',
+      'line 6',
+      'line 7',
+      'line 8',
+    ]
+    expect(isCompletionState(lines.join('\n'))).toBe(true)
+  })
 })
 
 describe('resolveFileExtension', () => {
