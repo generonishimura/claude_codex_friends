@@ -1,216 +1,167 @@
 # Development Plan: claude_codex_friends
 
-Generated: 2026-03-17
-Based on: CLAUDE.md, PROMPT.md, docs/development-plan.md (previous), 全ソースコード, テストコード
+Updated: 2026-03-18
+Based on: CLAUDE.md, PROMPT.md, 全ソースコード, テストコード
 
 ## Executive Summary
 
-PROMPT.md の全10項目（ハードコード集約〜CLI応答検知堅牢化）は全て完了済み。残タスクは主に「安定性向上」「REPL UX 強化」「リファクタリング」の3フェーズ。全タスクが並行実装可能で依存関係はない。ドメイン層のテストカバレッジは高い（110テスト全パス）が、config バリデーション異常系・REPL シャットダウン・tmux.service 分割が未着手。
+PROMPT.md の全10項目 + 開発プラン全8タスクが **全て完了**。3フェーズ（安定性向上・REPL UX強化・リファクタリング）の全タスクが実装・レビュー・マージ済み。テスト数は 110 → **175件** に増加。
 
 ## Analysis Summary
 
 | Category | Not Started | Partial | Untested | Divergent | Complete |
 |----------|-------------|---------|----------|-----------|----------|
-| Domain   | 0           | 0       | 0        | 0         | 6        |
-| Config   | 1           | 0       | 0        | 0         | 1        |
-| REPL     | 2           | 1       | 0        | 0         | 1        |
-| Service  | 1           | 0       | 0        | 0         | 1        |
-| Tests    | 1           | 0       | 0        | 0         | 5        |
+| Domain   | 0           | 0       | 0        | 0         | 8        |
+| Config   | 0           | 0       | 0        | 0         | 2        |
+| REPL     | 0           | 0       | 0        | 0         | 4        |
+| Service  | 0           | 0       | 0        | 0         | 2        |
+| Tests    | 0           | 0       | 0        | 0         | 10       |
 
 ## Current State
 
 - **TypeScript ビルド**: OK (`npm run typecheck` パス)
-- **テスト**: 5ファイル / 110テスト 全パス
-- **ソースファイル**: 12ファイル (domain: 5, config: 1, services: 1, orchestrator: 2, repl: 2, ui: 1)
-- **テストファイル**: 5ファイル (domain: 3, config: 1, repl: 1)
+- **テスト**: 10ファイル / 175テスト 全パス
+- **ソースファイル**: 18ファイル (domain: 7, config: 1, services: 5, orchestrator: 2, repl: 3, ui: 1)
+- **テストファイル**: 10ファイル (domain: 5, config: 1, repl: 2, ui: 1, orchestrator: 1)
 
 ---
 
-## Phase 1: 安定性・堅牢性の向上（High Priority）
+## Phase 1: 安定性・堅牢性の向上 — Complete
 
 ### 1-1. CLI引数バリデーション追加
 
-- **Status**: Not Started
-- **Tags**: `core-path`, `parallelizable`
-- **Risk**: Low
-- **Evidence**: `src/config/index.ts:59` — `parseInt` の結果が NaN/0以下でもそのまま通る。`src/__tests__/config/parseMode.test.ts` に異常系テストケースなし
-- **Confidence**: High
-- **Description**: `maxIterations`, `timeoutMs`, `pollIntervalMs` に NaN・0以下・負数が渡された場合のバリデーション追加。`parseMode()` の戻り値を `Result<RunMode>` に変更するか、不正値で `console.error` + `process.exit(1)` する
-- **Affected Files**: `src/config/index.ts`, `src/__tests__/config/parseMode.test.ts`
-- **Dependencies**: なし
-- **Estimated Scope**: S (<50 lines)
-- **Done Criteria**:
-  - `parseMode(['task', '-m', '0'])` がエラー
-  - `parseMode(['task', '-m', 'abc'])` がエラー
-  - `parseMode(['task', '-m', '-3'])` がエラー
-  - `-t` と `--poll-interval` でも同様に検証
-  - 正常系テストが引き続きパス
-- **Required Tests**: unit
+- **Status**: Complete (PR #7, merged 2026-03-18)
+- **Implementation**:
+  - `src/domain/config.rules.ts` に `validateNumericOptions()` 純粋関数を追加
+  - `Number.isInteger(value) && value >= 1` で整数バリデーション
+  - `parseMode()` の戻り値を `Result<RunMode, DomainError>` に変更
+  - `src/index.ts` でバリデーションエラー時に `process.exit(1)`
+- **Tests Added**: 15件 (config.rules: 13, parseMode: 2追加)
+- **New Files**: `src/domain/config.rules.ts`, `src/__tests__/domain/config.rules.test.ts`
 
 ### 1-2. REPL のグレースフルシャットダウン
 
-- **Status**: Not Started
-- **Tags**: `core-path`
-- **Risk**: Low
-- **Evidence**: `src/repl/index.ts:197-201` — `/exit` は `process.exit(0)` のみで tmux セッションクリーンアップなし。`src/index.ts:10-24` にgraceful shutdown があるが REPL 内ではシグナルハンドリングなし
-- **Confidence**: High
-- **Description**: REPL 実行中の Ctrl+C/SIGTERM で tmux セッション破棄の確認を出し、一時ファイルをクリーンアップする。`/exit` 実行時もセッション破棄を確認する
-- **Affected Files**: `src/repl/index.ts`, `src/index.ts`
-- **Dependencies**: なし
-- **Estimated Scope**: S (<50 lines)
-- **Done Criteria**:
-  - `/exit` 時に「tmux セッションを破棄しますか？」確認あり
-  - Ctrl+C で一時ファイル削除
-  - ループ実行中の Ctrl+C でもクリーンアップ
-- **Required Tests**: 手動確認（シグナルハンドリング）
+- **Status**: Complete (PR #13, merged 2026-03-18)
+- **Implementation**:
+  - `src/index.ts` のクリーンアップロジックを `cleanup()` 関数に抽出
+  - REPL `/exit` で `cleanupTempFiles()` を呼び出してから終了
+  - SIGINT は既存の `setupGracefulShutdown` でカバー
+- **Design Decision**: REPL は tmux セッション内で動作するため、セッション破棄はせず一時ファイル削除のみ
 
 ### 1-3. runLoop のエラー伝搬改善
 
-- **Status**: Partial（`LoopEngine` は `err()` を返すが、`EngineResult` にエラー情報フィールドがない）
-- **Tags**: `core-path`
-- **Risk**: Medium
-- **Evidence**: `src/domain/engine.types.ts:63-70` の `EngineResult` に `errorMessage` フィールドなし。`src/orchestrator/loop-engine.ts:96-98` でエラー時に `err()` は返しているが、正常完了パスでのエラー情報が失われる
-- **Confidence**: Medium
-- **Description**: `EngineResult` に `errorMessage?: string` を追加し、エラー発生イテレーション情報を含める
-- **Affected Files**: `src/domain/engine.types.ts`, `src/orchestrator/loop-engine.ts`
-- **Dependencies**: なし
-- **Estimated Scope**: S (<50 lines)
-- **Done Criteria**:
-  - `EngineResult.errorMessage` にエラー内容が格納される
-  - 呼び出し元でエラー理由を表示できる
-- **Required Tests**: unit
+- **Status**: Complete (PR #8, merged 2026-03-18)
+- **Implementation**:
+  - `EngineResult` に `errorMessage?: string` フィールドを追加
+  - `EngineState` に `lastError: string | null` を追加
+  - エラー時も `state.lastError` をセットしつつ従来通り `err()` を返す
+  - `finalize()` でエラー時のコード保存を抑制
+- **Tests Added**: 4件 (engine.types.test.ts)
+- **New Files**: `src/__tests__/domain/engine.types.test.ts`
 
 ---
 
-## Phase 2: REPL ユーザビリティ強化（Medium Priority）
+## Phase 2: REPL ユーザビリティ強化 — Complete
 
 ### 2-1. REPL 設定変更コマンド追加 (`/set`)
 
-- **Status**: Not Started
-- **Tags**: `parallelizable`
-- **Risk**: Low
-- **Evidence**: `src/domain/repl.types.ts` — `/set` コマンド型が未定義。`src/repl/commands.ts` にも `/set` パース処理なし
-- **Confidence**: High
-- **Description**: `/set language <lang>`, `/set max-iterations <n>`, `/set output <path>` でセッション中の設定変更を可能にする
-- **Affected Files**: `src/domain/repl.types.ts`, `src/repl/commands.ts`, `src/repl/index.ts`, `src/__tests__/repl/commands.test.ts`
-- **Dependencies**: なし
-- **Estimated Scope**: M (50-200 lines)
-- **Done Criteria**:
-  - `/set language python` で以降のタスクが Python で実行
-  - `/set max-iterations 10` で最大イテレーション数変更
-  - `/set output result.ts` で出力先変更
-  - 不正キーにエラーメッセージ
-- **Required Tests**: unit
+- **Status**: Complete (PR #11, merged 2026-03-18)
+- **Implementation**:
+  - `ReplCommand` 型に `set` バリアントを追加
+  - `src/domain/repl.rules.ts` に `validateSetCommand()` 関数（有効キー・数値検証）
+  - `/set language|max-iterations|output` でランタイム設定変更
+  - `/set` のみで現在設定表示
+  - 単語境界チェック (`/set` vs `/settings` の誤マッチ防止)
+  - `outputPath` を LoopEngine に伝搬
+- **Tests Added**: 13件 (commands: 6, repl.rules: 7)
+- **New Files**: `src/domain/repl.rules.ts`, `src/__tests__/domain/repl.rules.test.ts`
 
 ### 2-2. レビュー結果サマリ表示改善
 
-- **Status**: Not Started
-- **Tags**: `parallelizable`
-- **Risk**: Low
-- **Evidence**: `src/ui/terminal.ts:138-157` — `printReplLastResult()` はコード全文表示。省略表示やレビューコメント表示なし
-- **Confidence**: High
-- **Description**: `/last` でコード先頭10行 + "...省略..." 形式。`/last --full` で全文表示。レビューコメントも表示する
-- **Affected Files**: `src/ui/terminal.ts`, `src/repl/index.ts`, `src/domain/repl.types.ts`, `src/repl/commands.ts`
-- **Dependencies**: なし
-- **Estimated Scope**: S (<50 lines)
-- **Done Criteria**:
-  - `/last` がコード先頭10行 + 省略表示
+- **Status**: Complete (PR #12, merged 2026-03-18)
+- **Implementation**:
+  - `/last` でコード先頭10行 + 省略表示（残り行数付き）
   - `/last --full` で全文表示
-  - レビューコメントが表示される
-- **Required Tests**: unit
+  - `truncateCode()` ヘルパー関数を追加
+  - `ReplCommand` の `last` に `payload: 'full' | undefined` を追加（型一貫性）
+  - 単語境界チェック (`/last` vs `/lastly` の誤マッチ防止)
+- **Tests Added**: 5件 (commands: 2, terminal: 3)
+- **New Files**: `src/__tests__/ui/terminal.test.ts`
 
-### 2-3. REPL のコマンド補完・入力履歴
+### 2-3. REPL のコマンド補完
 
-- **Status**: Not Started
-- **Tags**: `parallelizable`
-- **Risk**: Low
-- **Evidence**: `src/repl/index.ts:76-79` — `createInterface` に `completer` オプションなし
-- **Confidence**: High
-- **Description**: readline の `completer` でスラッシュコマンドのタブ補完追加。セッション内コマンド履歴保持
-- **Affected Files**: `src/repl/index.ts`
-- **Dependencies**: なし
-- **Estimated Scope**: S (<50 lines)
-- **Done Criteria**:
-  - `/he` + Tab で `/help` に補完
-  - 上矢印キーで過去コマンド呼び出し
-- **Required Tests**: 手動確認
+- **Status**: Complete (PR #10, merged 2026-03-18)
+- **Implementation**:
+  - `src/repl/completer.ts` に readline 用 `completer` 関数を追加
+  - スラッシュコマンド9種と `@` コマンド2種をタブ補完
+  - `createInterface` に `completer` オプション設定
+- **Tests Added**: 10件 (completer.test.ts)
+- **New Files**: `src/repl/completer.ts`, `src/__tests__/repl/completer.test.ts`
 
 ---
 
-## Phase 3: テスト強化・リファクタリング（Low Priority）
+## Phase 3: テスト強化・リファクタリング — Complete
 
 ### 3-1. isCompletionState テスト強化
 
-- **Status**: Not Started（基本テストは `loop.rules.test.ts` に8件あり）
-- **Tags**: `parallelizable`
-- **Risk**: Low
-- **Evidence**: `src/__tests__/domain/loop.rules.test.ts:317-369` — 基本パターンはカバー済みだが、複数パターン混在・ANSIコード複合ケース等が不足
-- **Confidence**: Medium
-- **Description**: エッジケースの追加: 複数行プロンプトパターン混在、ANSI + 完了パターン組み合わせ等
-- **Affected Files**: `src/__tests__/domain/loop.rules.test.ts`
-- **Dependencies**: なし
-- **Estimated Scope**: S (<50 lines)
-- **Done Criteria**: isCompletionState のテストが15ケース以上
-- **Required Tests**: unit
+- **Status**: Complete (PR #9, merged 2026-03-18)
+- **Implementation**:
+  - 9件のエッジケーステストを追加（既存9件 → 計18件）
+  - カバー: 複数パターン混在、ANSI囲み、100行超出力、last-5-lines境界、\r\n改行、タブ文字、空行
+- **Tests Added**: 9件
 
 ### 3-2. tmux.service.ts の分割
 
-- **Status**: Not Started
-- **Tags**: `parallelizable`
-- **Risk**: Medium
-- **Evidence**: `src/services/tmux.service.ts` — 289行。セッション管理・ペイン操作・ファイル管理が混在
-- **Confidence**: High
-- **Description**: 3ファイルに分割し re-export で後方互換性維持
-  - `src/services/tmux-session.service.ts` — セッション管理（create/destroy/exists）
-  - `src/services/tmux-pane.service.ts` — ペイン操作（capture/send/completion検知）
-  - `src/services/file.service.ts` — 一時ファイル管理
-- **Affected Files**: `src/services/tmux.service.ts` → 3ファイル + re-export
-- **Dependencies**: なし
-- **Estimated Scope**: M (50-200 lines / 移動中心だが影響範囲広い)
-- **Done Criteria**:
-  - 各ファイルが100行以下
-  - 既存 import が壊れない（re-export）
-  - 全テストがパス
-- **Required Tests**: unit（既存テスト通過確認）
-- **Commit Strategy**: 3コミットに分割
-  1. `refactor: tmux.serviceからセッション管理を分離`
-  2. `refactor: tmux.serviceからペイン操作を分離`
-  3. `refactor: tmux.serviceからファイル管理を分離`
+- **Status**: Complete (PR #14, merged 2026-03-18)
+- **Implementation**:
+  - `tmux.service.ts` (289行) を4ファイルに分割:
+    - `src/services/file.service.ts` — ファイル管理
+    - `src/services/tmux-core.ts` — 共有ユーティリティ (tmux(), sleep())
+    - `src/services/tmux-pane.service.ts` — ペイン操作
+    - `src/services/tmux-session.service.ts` — セッション管理
+  - `tmux.service.ts` を barrel re-export ファイルに変換（後方互換性維持）
+- **Commit Strategy**: 3コミットで段階的分離
+- **New Files**: `src/services/file.service.ts`, `src/services/tmux-core.ts`, `src/services/tmux-pane.service.ts`, `src/services/tmux-session.service.ts`
 
 ---
 
-## Dependency Graph
+## Resolved Questions
+
+1. **parseMode のエラーハンドリング方式**: `Result<RunMode, DomainError>` を採用。ドメイン層の `validateNumericOptions()` で整数チェック、`index.ts` で `process.exit(1)`
+2. **REPL のセッション所有権**: launcher が tmux セッションを管理。REPL `/exit` は一時ファイル削除のみ、セッション破棄はしない
+3. **config テスト**: `parseMode.test.ts` (18件) + `config.rules.test.ts` (13件) で十分なカバレッジ
+
+## Architecture (Post-Refactoring)
 
 ```
-全タスクが独立 — 並行実装可能
-
-Phase 1 (安定性)          Phase 2 (REPL UX)        Phase 3 (リファクタ)
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
-│ 1-1 Config検証  │    │ 2-1 /set コマンド │    │ 3-1 テスト強化       │
-│ 1-2 Shutdown    │    │ 2-2 /last 改善   │    │ 3-2 tmux.service分割 │
-│ 1-3 エラー伝搬  │    │ 2-3 補完・履歴   │    │                      │
-└─────────────────┘    └──────────────────┘    └─────────────────────┘
+src/
+├── domain/              # ドメイン層（純粋関数・型定義）
+│   ├── types.ts         # Result<T,E>, ok(), err()
+│   ├── loop.types.ts    # LoopState, LoopConfig, IterationResult
+│   ├── loop.rules.ts    # プロンプト構築、ループ判定、コード抽出
+│   ├── engine.types.ts  # EngineState, EngineResult, EngineEvent
+│   ├── engine.rules.ts  # ステートマシン判定ルール
+│   ├── repl.types.ts    # ReplCommand 型定義
+│   ├── repl.rules.ts    # /set バリデーション
+│   ├── config.rules.ts  # 数値オプションバリデーション
+│   └── errors.ts        # エラー定義
+├── services/            # インフラ層（tmux操作、ファイルI/O）
+│   ├── tmux.service.ts  # barrel re-export（後方互換）
+│   ├── tmux-core.ts     # tmux(), sleep()
+│   ├── tmux-pane.service.ts    # sendPrompt, capturePane, waitForCompletion
+│   ├── tmux-session.service.ts # createSession, destroySession, startClaude/Codex
+│   └── file.service.ts  # saveCodeToTempFile, cleanupTempFiles
+├── orchestrator/        # ループ実行エンジン
+│   ├── agent-loop.ts    # 自動ループ実行
+│   └── loop-engine.ts   # LoopEngine ステートマシン
+├── repl/                # REPL インターフェース
+│   ├── index.ts         # startRepl()
+│   ├── commands.ts      # parseCommand()
+│   └── completer.ts     # タブ補完
+├── config/
+│   └── index.ts         # parseMode(), DEFAULTS
+├── ui/
+│   └── terminal.ts      # ターミナル出力・色付き表示
+├── launcher.ts          # 3ペイン tmux 起動
+└── index.ts             # エントリーポイント
 ```
-
-## Recommended Implementation Order
-
-1. **1-1** CLI引数バリデーション — 最も簡単かつバグ防止。TDDで即実装
-2. **1-2** グレースフルシャットダウン — ユーザー体験に直結
-3. **1-3** エラー伝搬改善 — 型変更を伴うのでPhase 1で完了したい
-4. **2-1** /set コマンド — REPL UX 改善の起点
-5. **2-2** /last サマリ表示 — 単体完結のUI改善
-6. **2-3** コマンド補完 — readline 設定変更のみ
-7. **3-1** テスト強化 — いつでも可能
-8. **3-2** tmux.service 分割 — 影響範囲が広いので最後が安全
-
-## Commit Granularity
-
-- 各サブタスク (1-1, 1-2, ...) を1コミット
-- テストとプロダクションコードは同一コミット
-- tmux.service 分割 (3-2) のみ3コミットに分割
-
-## Open Questions
-
-1. **parseMode のエラーハンドリング方式**: 現在 `parseMode()` は `RunMode` を直接返す。バリデーションエラーを `Result<RunMode>` にするか `process.exit(1)` にするか要判断
-2. **REPL のセッション所有権**: launcher モードで `/exit` 時にセッション全体を破棄すべきか、orchestrator ペインだけ終了すべきか仕様が曖昧
-3. **config テスト (旧3-1)**: `parseMode.test.ts` に既に14テストケースあり、フェーズ1-1でバリデーション異常系を追加すれば実質カバー済み
