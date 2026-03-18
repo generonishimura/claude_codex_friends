@@ -23,7 +23,7 @@ node -v && tmux -V && which claude && which codex
 
 ```bash
 git clone <repository-url>
-cd claude_codex_friends
+cd claude-codex-friends
 npm install
 npm run build
 npm link     # ccf コマンドをグローバルに登録

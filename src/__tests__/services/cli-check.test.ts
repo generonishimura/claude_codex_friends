@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { Result, DomainError } from '../../domain/types.js'
 
 // execFileAsync をモックする
 const mockExecFileAsync = vi.fn()
