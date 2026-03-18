@@ -274,6 +274,31 @@ export async function startRepl(options: ReplOptions): Promise<void> {
           break
         }
 
+        case 'export': {
+          if (history.length === 0) {
+            console.log('エクスポートする履歴がありません。')
+          } else {
+            const path = command.payload ?? 'ccf-history.json'
+            try {
+              const exportData = history.map((entry, i) => ({
+                index: i + 1,
+                task: entry.task,
+                approved: entry.approved,
+                iterations: entry.iterations,
+                userAccepted: entry.userAccepted,
+                finalCode: entry.finalCode,
+              }))
+              await writeFile(path, JSON.stringify(exportData, null, 2), 'utf-8')
+              console.log(`履歴をエクスポートしました: ${path}`)
+            } catch (e) {
+              const message = e instanceof Error ? e.message : String(e)
+              printError(`エクスポートに失敗: ${message}`)
+            }
+          }
+          prompt()
+          break
+        }
+
         case 'help': {
           printReplHelp()
           prompt()

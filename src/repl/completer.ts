@@ -10,6 +10,7 @@ const COMMANDS = [
   '/continue',
   '/save',
   '/set',
+  '/export',
 ]
 
 const SET_KEYS = [

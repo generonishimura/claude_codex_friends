@@ -34,6 +34,11 @@ export function parseCommand(input: string): ReplCommand {
     return { type: 'save', payload: arg || undefined }
   }
 
+  if (trimmed === '/export' || trimmed.startsWith('/export ')) {
+    const arg = trimmed.slice('/export'.length).trim()
+    return { type: 'export', payload: arg || undefined }
+  }
+
   if (trimmed === '/set' || trimmed.startsWith('/set ')) {
     const parts = trimmed.slice('/set'.length).trim().split(/\s+/)
     if (parts.length >= 2 && parts[0]) {

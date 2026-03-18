@@ -88,6 +88,7 @@ ${COLORS.cyan}設定:${COLORS.reset}
 
 ${COLORS.cyan}情報・管理:${COLORS.reset}
   ${COLORS.bold}/save [path]${COLORS.reset}       前回の結果をファイルに保存
+  ${COLORS.bold}/export [path]${COLORS.reset}    全履歴をJSONファイルにエクスポート
   ${COLORS.bold}/status${COLORS.reset}            両ペインの現在状態を表示
   ${COLORS.bold}/history${COLORS.reset}           実行履歴を表示
   ${COLORS.bold}/last [--full]${COLORS.reset}      前回の実行結果を表示（--full で全文）
