@@ -8,6 +8,7 @@ import type { UserDecision, AskUserContext } from '../domain/engine.types.js'
 import {
   sendPrompt,
   capturePane,
+  cleanupTempFiles,
 } from '../services/tmux.service.js'
 import {
   printError,
@@ -238,8 +239,9 @@ export async function startRepl(options: ReplOptions): Promise<void> {
         }
 
         case 'exit': {
-          console.log('セッションを終了します。')
+          console.log('REPLを終了します。クリーンアップ中...')
           rl.close()
+          await cleanupTempFiles()
           process.exit(0)
         }
       }
