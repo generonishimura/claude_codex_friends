@@ -1,4 +1,7 @@
 import type { LoopConfig } from '../domain/loop.types.js'
+import type { Result, DomainError } from '../domain/types.js'
+import { ok, err } from '../domain/types.js'
+import { validateNumericOptions } from '../domain/config.rules.js'
 
 /** デフォルト設定値 */
 export const DEFAULTS = {
@@ -29,7 +32,7 @@ export type RunMode =
   | { mode: 'auto'; config: LoopConfig & { sessionName: string; keepSession: boolean; logPath?: string } }
 
 /** CLI引数をパースして実行モードを判定する */
-export function parseMode(args: string[]): RunMode {
+export function parseMode(args: string[]): Result<RunMode, DomainError> {
   const positional: string[] = []
   let language: string | undefined
   let outputPath: string | undefined
@@ -83,20 +86,26 @@ export function parseMode(args: string[]): RunMode {
     }
   }
 
+  // 数値オプションのバリデーション
+  const validation = validateNumericOptions({ maxIterations, timeoutMs, pollIntervalMs })
+  if (!validation.ok) {
+    return err(validation.error)
+  }
+
   // --repl フラグ: REPLモード（ランチャーからの自己呼び出し）
   if (replMode) {
-    return { mode: 'repl', language, maxIterations, timeoutMs, pollIntervalMs }
+    return ok({ mode: 'repl', language, maxIterations, timeoutMs, pollIntervalMs })
   }
 
   const task = positional.join(' ')
 
   // タスク指定なし: ランチャーモード（3ペイン起動）
   if (!task) {
-    return { mode: 'launcher' }
+    return ok({ mode: 'launcher' })
   }
 
   // タスク指定あり: 自動ループモード（既存動作）
-  return {
+  return ok({
     mode: 'auto',
     config: {
       task,
@@ -109,7 +118,7 @@ export function parseMode(args: string[]): RunMode {
       keepSession,
       logPath,
     },
-  }
+  })
 }
 
 function printHelp(): void {

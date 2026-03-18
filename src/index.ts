@@ -25,7 +25,12 @@ function setupGracefulShutdown(sessionName: string, keepSession: boolean): void 
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
-  const mode = parseMode(args)
+  const modeResult = parseMode(args)
+  if (!modeResult.ok) {
+    printError(modeResult.error.message)
+    process.exit(1)
+  }
+  const mode = modeResult.value
 
   switch (mode.mode) {
     case 'launcher': {
