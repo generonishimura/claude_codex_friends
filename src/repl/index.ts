@@ -126,6 +126,15 @@ export async function startRepl(options: ReplOptions): Promise<void> {
               finalCode: result.value.finalCode,
               userAccepted: result.value.userAccepted,
             })
+          } else {
+            printError(result.error.message)
+            history.push({
+              task: command.payload,
+              approved: false,
+              iterations: 0,
+              finalCode: null,
+              userAccepted: false,
+            })
           }
           prompt()
           break
@@ -134,7 +143,10 @@ export async function startRepl(options: ReplOptions): Promise<void> {
         case 'claude': {
           if (command.payload) {
             const result = await sendPrompt(options.targets.claude, command.payload)
-            if (!result.ok) printError(result.error.message)
+            if (!result.ok) {
+              printError(result.error.message)
+              console.log('  /status でペインの状態を確認してください')
+            }
           }
           prompt()
           break
@@ -143,7 +155,10 @@ export async function startRepl(options: ReplOptions): Promise<void> {
         case 'codex': {
           if (command.payload) {
             const result = await sendPrompt(options.targets.codex, command.payload)
-            if (!result.ok) printError(result.error.message)
+            if (!result.ok) {
+              printError(result.error.message)
+              console.log('  /status でペインの状態を確認してください')
+            }
           }
           prompt()
           break
