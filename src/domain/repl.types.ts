@@ -11,5 +11,6 @@ export type ReplCommand =
   | { type: 'history' }
   | { type: 'last'; payload: 'full' | undefined }
   | { type: 'set'; payload: { key: string; value: string } | null }
+  | { type: 'export'; payload: string | undefined }
   | { type: 'help' }
   | { type: 'exit' }

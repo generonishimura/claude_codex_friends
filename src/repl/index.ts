@@ -89,6 +89,9 @@ export async function startRepl(options: ReplOptions): Promise<void> {
     language: options.language,
     maxIterations: options.maxIterations,
     outputPath: undefined as string | undefined,
+    promptInitial: undefined as string | undefined,
+    promptReview: undefined as string | undefined,
+    promptFix: undefined as string | undefined,
   }
 
   printReplBanner()
@@ -104,6 +107,14 @@ export async function startRepl(options: ReplOptions): Promise<void> {
             return
           }
 
+          const prompts = (settings.promptInitial || settings.promptReview || settings.promptFix)
+            ? {
+                initial: settings.promptInitial,
+                review: settings.promptReview,
+                fix: settings.promptFix,
+              }
+            : undefined
+
           const engine = new LoopEngine(
             {
               task: command.payload,
@@ -112,6 +123,7 @@ export async function startRepl(options: ReplOptions): Promise<void> {
               maxIterations: settings.maxIterations,
               timeoutMs: options.timeoutMs,
               pollIntervalMs: options.pollIntervalMs,
+              prompts,
               onAskUser: (context) => askUserDecision(rl, context),
             },
             options.targets,
@@ -126,6 +138,16 @@ export async function startRepl(options: ReplOptions): Promise<void> {
               finalCode: result.value.finalCode,
               userAccepted: result.value.userAccepted,
             })
+          } else {
+            printError(result.error.message)
+            const state = engine.getState()
+            history.push({
+              task: command.payload,
+              approved: false,
+              iterations: state.iteration,
+              finalCode: state.currentCode,
+              userAccepted: false,
+            })
           }
           prompt()
           break
@@ -134,7 +156,10 @@ export async function startRepl(options: ReplOptions): Promise<void> {
         case 'claude': {
           if (command.payload) {
             const result = await sendPrompt(options.targets.claude, command.payload)
-            if (!result.ok) printError(result.error.message)
+            if (!result.ok) {
+              printError(result.error.message)
+              console.log('  /status でペインの状態を確認してください')
+            }
           }
           prompt()
           break
@@ -143,7 +168,10 @@ export async function startRepl(options: ReplOptions): Promise<void> {
         case 'codex': {
           if (command.payload) {
             const result = await sendPrompt(options.targets.codex, command.payload)
-            if (!result.ok) printError(result.error.message)
+            if (!result.ok) {
+              printError(result.error.message)
+              console.log('  /status でペインの状態を確認してください')
+            }
           }
           prompt()
           break
@@ -206,6 +234,9 @@ export async function startRepl(options: ReplOptions): Promise<void> {
             console.log(`  language: ${settings.language ?? '(未設定)'}`)
             console.log(`  max-iterations: ${settings.maxIterations}`)
             console.log(`  output: ${settings.outputPath ?? '(未設定)'}`)
+            console.log(`  prompt-initial: ${settings.promptInitial ?? '(デフォルト)'}`)
+            console.log(`  prompt-review: ${settings.promptReview ?? '(デフォルト)'}`)
+            console.log(`  prompt-fix: ${settings.promptFix ?? '(デフォルト)'}`)
           } else {
             const validation = validateSetCommand(command.payload.key, command.payload.value)
             if (!validation.ok) {
@@ -225,7 +256,44 @@ export async function startRepl(options: ReplOptions): Promise<void> {
                   settings.outputPath = value
                   console.log(`output を ${value} に設定しました`)
                   break
+                case 'prompt-initial':
+                  settings.promptInitial = value
+                  console.log(`prompt-initial を設定しました`)
+                  break
+                case 'prompt-review':
+                  settings.promptReview = value
+                  console.log(`prompt-review を設定しました`)
+                  break
+                case 'prompt-fix':
+                  settings.promptFix = value
+                  console.log(`prompt-fix を設定しました`)
+                  break
               }
+            }
+          }
+          prompt()
+          break
+        }
+
+        case 'export': {
+          if (history.length === 0) {
+            console.log('エクスポートする履歴がありません。')
+          } else {
+            const path = command.payload ?? 'ccf-history.json'
+            try {
+              const exportData = history.map((entry, i) => ({
+                index: i + 1,
+                task: entry.task,
+                approved: entry.approved,
+                iterations: entry.iterations,
+                userAccepted: entry.userAccepted,
+                finalCode: entry.finalCode,
+              }))
+              await writeFile(path, JSON.stringify(exportData, null, 2), 'utf-8')
+              console.log(`履歴をエクスポートしました: ${path}`)
+            } catch (e) {
+              const message = e instanceof Error ? e.message : String(e)
+              printError(`エクスポートに失敗: ${message}`)
             }
           }
           prompt()

@@ -1,3 +1,5 @@
+import { VALID_SET_KEYS } from '../domain/repl.rules.js'
+
 /** REPL コマンドの補完リスト */
 const COMMANDS = [
   '/status',
@@ -9,6 +11,8 @@ const COMMANDS = [
   '/reject',
   '/continue',
   '/save',
+  '/set',
+  '/export',
 ]
 
 const AT_COMMANDS = [
@@ -18,6 +22,13 @@ const AT_COMMANDS = [
 
 /** readline 用の補完関数 */
 export function completer(line: string): [string[], string] {
+  // /set <key> の補完
+  if (line.startsWith('/set ')) {
+    const partial = line.slice('/set '.length)
+    const hits = VALID_SET_KEYS.filter(key => key.startsWith(partial)).map(key => `/set ${key}`)
+    return [hits, line]
+  }
+
   if (line.startsWith('/')) {
     const hits = COMMANDS.filter(cmd => cmd.startsWith(line))
     return [hits, line]

@@ -159,6 +159,18 @@ describe('parseCommand', () => {
     })
   })
 
+  describe('/export コマンド', () => {
+    it('/export history.json でファイルパス付きexport', () => {
+      const result = parseCommand('/export history.json')
+      expect(result).toEqual({ type: 'export', payload: 'history.json' })
+    })
+
+    it('/export のみでデフォルトパス (payload undefined)', () => {
+      const result = parseCommand('/export')
+      expect(result).toEqual({ type: 'export', payload: undefined })
+    })
+  })
+
   describe('空入力', () => {
     it('空文字列はタスクとして空payloadを返す', () => {
       const result = parseCommand('')
