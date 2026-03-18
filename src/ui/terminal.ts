@@ -57,6 +57,24 @@ export function printSaved(path: string): void {
   console.log(`${COLORS.green}コードを保存しました: ${path}${COLORS.reset}`)
 }
 
+/** プログレスドットを表示する（改行なし） */
+export function printProgress(label: string): { stop: (success: boolean) => void } {
+  process.stdout.write(`${COLORS.dim}${label}${COLORS.reset}`)
+  const interval = setInterval(() => {
+    process.stdout.write(`${COLORS.dim}.${COLORS.reset}`)
+  }, 1000)
+  return {
+    stop(success: boolean) {
+      clearInterval(interval)
+      if (success) {
+        process.stdout.write(` ${COLORS.green}OK${COLORS.reset}\n`)
+      } else {
+        process.stdout.write(` ${COLORS.red}FAILED${COLORS.reset}\n`)
+      }
+    },
+  }
+}
+
 export function printSessionInfo(sessionName: string): void {
   console.log(`${COLORS.dim}tmux セッション: ${sessionName}`)
   console.log(`別ターミナルから監視: tmux attach-session -t ${sessionName}${COLORS.reset}\n`)

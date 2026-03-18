@@ -17,6 +17,11 @@ export const ERRORS = {
     message: `tmux セッション "${name}" が見つかりません。`,
   }),
 
+  CLI_NOT_FOUND: (cli: string): DomainError => ({
+    code: 'CLI_NOT_FOUND',
+    message: `${cli} コマンドが見つかりません。which ${cli} で確認してください。`,
+  }),
+
   CLI_START_FAILED: (cli: string, detail: string): DomainError => ({
     code: 'CLI_START_FAILED',
     message: `${cli} CLI の起動に失敗しました: ${detail}`,

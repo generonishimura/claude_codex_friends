@@ -2,6 +2,7 @@ import { execFile, spawnSync } from 'node:child_process'
 import { promisify } from 'node:util'
 import {
   checkTmuxAvailable,
+  checkCliAvailable,
   createThreePaneSession,
   destroySession,
   sessionExists,
@@ -9,7 +10,7 @@ import {
   startCodex,
   waitForShellReady,
 } from './services/tmux.service.js'
-import { printError } from './ui/terminal.js'
+import { printError, printProgress } from './ui/terminal.js'
 import { DEFAULTS } from './config/index.js'
 
 const execFileAsync = promisify(execFile)
@@ -41,6 +42,15 @@ export async function launchThreePane(): Promise<void> {
     process.exit(1)
   }
 
+  // claude / codex CLI の存在確認
+  for (const cli of ['claude', 'codex'] as const) {
+    const cliCheck = await checkCliAvailable(cli)
+    if (!cliCheck.ok) {
+      printError(cliCheck.error.message)
+      process.exit(1)
+    }
+  }
+
   // 既存セッションがあれば破棄
   if (await sessionExists(DEFAULTS.sessionName)) {
     await destroySession(DEFAULTS.sessionName)
@@ -58,22 +68,24 @@ export async function launchThreePane(): Promise<void> {
   const codexTarget = `${DEFAULTS.sessionName}:0.2`
 
   // 全ペインのシェル起動完了を待つ
-  console.log('シェルの起動を待機中...')
+  const shellProgress = printProgress('シェルの起動を待機中')
   const shellResults = await Promise.all([
     waitForShellReady(orchestratorTarget),
     waitForShellReady(claudeTarget),
     waitForShellReady(codexTarget),
   ])
-  for (const result of shellResults) {
-    if (!result.ok) {
-      printError(`シェルの起動に失敗: ${result.error.message}`)
-      await destroySession(DEFAULTS.sessionName)
-      process.exit(1)
-    }
+  const shellFailed = shellResults.find(r => !r.ok)
+  shellProgress.stop(!shellFailed)
+  if (shellFailed && !shellFailed.ok) {
+    printError(`シェルの起動に失敗: ${shellFailed.error.message}`)
+    await destroySession(DEFAULTS.sessionName)
+    process.exit(1)
   }
 
   // Claude ペイン (pane 1) で claude CLI を起動
+  const claudeProgress = printProgress('Claude CLI を起動中')
   const claudeStart = await startClaude(claudeTarget)
+  claudeProgress.stop(claudeStart.ok)
   if (!claudeStart.ok) {
     printError(claudeStart.error.message)
     await destroySession(DEFAULTS.sessionName)
@@ -81,7 +93,9 @@ export async function launchThreePane(): Promise<void> {
   }
 
   // Codex ペイン (pane 2) で codex CLI を起動
+  const codexProgress = printProgress('Codex CLI を起動中')
   const codexStart = await startCodex(codexTarget)
+  codexProgress.stop(codexStart.ok)
   if (!codexStart.ok) {
     printError(codexStart.error.message)
     await destroySession(DEFAULTS.sessionName)

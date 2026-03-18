@@ -8,6 +8,7 @@ import { LoopEngine } from './loop-engine.js'
 import type { LoopTargets, LoopEngineConfig } from './loop-engine.js'
 import {
   checkTmuxAvailable,
+  checkCliAvailable,
   createSession,
   destroySession,
   sessionExists,
@@ -19,6 +20,7 @@ import {
   printBanner,
   printConfig,
   printError,
+  printProgress,
   printSessionInfo,
 } from '../ui/terminal.js'
 
@@ -85,6 +87,15 @@ export async function runAgentLoop(
     return err(tmuxCheck.error)
   }
 
+  // claude / codex CLI の存在確認
+  for (const cli of ['claude', 'codex'] as const) {
+    const cliCheck = await checkCliAvailable(cli)
+    if (!cliCheck.ok) {
+      printError(cliCheck.error.message)
+      return err(cliCheck.error)
+    }
+  }
+
   // 既存セッションがあれば破棄
   if (await sessionExists(config.sessionName)) {
     await destroySession(config.sessionName)
@@ -119,7 +130,7 @@ export async function runAgentLoop(
   }
 
   // CLIの起動完了を待つ
-  console.log('Claude CLI の起動を待機中...')
+  const claudeWait = printProgress('Claude CLI の起動を待機中')
   const claudeReady = await waitForCompletion(
     claudeTarget,
     config.timeoutMs,
@@ -127,13 +138,14 @@ export async function runAgentLoop(
     '',
     DEFAULTS.cliStartupDelayMs,
   )
+  claudeWait.stop(claudeReady.ok)
   if (!claudeReady.ok) {
     printError(`Claude CLI の起動に失敗: ${claudeReady.error.message}`)
     await destroySession(config.sessionName)
     return err(claudeReady.error)
   }
 
-  console.log('Codex CLI の起動を待機中...')
+  const codexWait = printProgress('Codex CLI の起動を待機中')
   const codexReady = await waitForCompletion(
     codexTarget,
     config.timeoutMs,
@@ -142,6 +154,7 @@ export async function runAgentLoop(
     DEFAULTS.cliStartupDelayMs,
     true, // autoAcceptTrust
   )
+  codexWait.stop(codexReady.ok)
   if (!codexReady.ok) {
     printError(`Codex CLI の起動に失敗: ${codexReady.error.message}`)
     await destroySession(config.sessionName)

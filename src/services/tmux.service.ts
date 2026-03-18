@@ -12,6 +12,7 @@ export { saveCodeToTempFile, cleanupTempFiles } from './file.service.js'
 export { sendPrompt, capturePane, waitForCompletion, withRetry } from './tmux-pane.service.js'
 export {
   checkTmuxAvailable,
+  checkCliAvailable,
   createSession,
   createThreePaneSession,
   destroySession,
