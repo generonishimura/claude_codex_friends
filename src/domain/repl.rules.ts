@@ -1,7 +1,7 @@
 import type { Result, DomainError } from './types.js'
 import { ok, err } from './types.js'
 
-const VALID_SET_KEYS = ['language', 'max-iterations', 'output'] as const
+const VALID_SET_KEYS = ['language', 'max-iterations', 'output', 'prompt-initial', 'prompt-review', 'prompt-fix'] as const
 export type SetKey = (typeof VALID_SET_KEYS)[number]
 
 /** /set コマンドのキーと値をバリデーションする */

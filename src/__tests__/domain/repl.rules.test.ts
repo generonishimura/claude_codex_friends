@@ -39,4 +39,23 @@ describe('validateSetCommand', () => {
     const result = validateSetCommand('max-iterations', '-3')
     expect(result.ok).toBe(false)
   })
+
+  it('prompt-initial は有効なキー', () => {
+    const result = validateSetCommand('prompt-initial', '{{task}} を {{language}} で実装')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.key).toBe('prompt-initial')
+      expect(result.value.value).toBe('{{task}} を {{language}} で実装')
+    }
+  })
+
+  it('prompt-review は有効なキー', () => {
+    const result = validateSetCommand('prompt-review', '{{codeFilePath}} をレビュー')
+    expect(result.ok).toBe(true)
+  })
+
+  it('prompt-fix は有効なキー', () => {
+    const result = validateSetCommand('prompt-fix', '{{review}} に基づいて修正')
+    expect(result.ok).toBe(true)
+  })
 })

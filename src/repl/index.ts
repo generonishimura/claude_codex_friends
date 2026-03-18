@@ -89,6 +89,9 @@ export async function startRepl(options: ReplOptions): Promise<void> {
     language: options.language,
     maxIterations: options.maxIterations,
     outputPath: undefined as string | undefined,
+    promptInitial: undefined as string | undefined,
+    promptReview: undefined as string | undefined,
+    promptFix: undefined as string | undefined,
   }
 
   printReplBanner()
@@ -104,6 +107,14 @@ export async function startRepl(options: ReplOptions): Promise<void> {
             return
           }
 
+          const prompts = (settings.promptInitial || settings.promptReview || settings.promptFix)
+            ? {
+                initial: settings.promptInitial,
+                review: settings.promptReview,
+                fix: settings.promptFix,
+              }
+            : undefined
+
           const engine = new LoopEngine(
             {
               task: command.payload,
@@ -112,6 +123,7 @@ export async function startRepl(options: ReplOptions): Promise<void> {
               maxIterations: settings.maxIterations,
               timeoutMs: options.timeoutMs,
               pollIntervalMs: options.pollIntervalMs,
+              prompts,
               onAskUser: (context) => askUserDecision(rl, context),
             },
             options.targets,
@@ -221,6 +233,9 @@ export async function startRepl(options: ReplOptions): Promise<void> {
             console.log(`  language: ${settings.language ?? '(未設定)'}`)
             console.log(`  max-iterations: ${settings.maxIterations}`)
             console.log(`  output: ${settings.outputPath ?? '(未設定)'}`)
+            console.log(`  prompt-initial: ${settings.promptInitial ?? '(デフォルト)'}`)
+            console.log(`  prompt-review: ${settings.promptReview ?? '(デフォルト)'}`)
+            console.log(`  prompt-fix: ${settings.promptFix ?? '(デフォルト)'}`)
           } else {
             const validation = validateSetCommand(command.payload.key, command.payload.value)
             if (!validation.ok) {
@@ -239,6 +254,18 @@ export async function startRepl(options: ReplOptions): Promise<void> {
                 case 'output':
                   settings.outputPath = value
                   console.log(`output を ${value} に設定しました`)
+                  break
+                case 'prompt-initial':
+                  settings.promptInitial = value
+                  console.log(`prompt-initial を設定しました`)
+                  break
+                case 'prompt-review':
+                  settings.promptReview = value
+                  console.log(`prompt-review を設定しました`)
+                  break
+                case 'prompt-fix':
+                  settings.promptFix = value
+                  console.log(`prompt-fix を設定しました`)
                   break
               }
             }
