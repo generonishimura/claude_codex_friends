@@ -10,5 +10,6 @@ export type ReplCommand =
   | { type: 'status' }
   | { type: 'history' }
   | { type: 'last' }
+  | { type: 'set'; payload: { key: string; value: string } | null }
   | { type: 'help' }
   | { type: 'exit' }

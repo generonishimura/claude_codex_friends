@@ -18,6 +18,7 @@ import {
   printReplLastResult,
   printAskUser,
 } from '../ui/terminal.js'
+import { validateSetCommand } from '../domain/repl.rules.js'
 
 interface ReplOptions {
   targets: LoopTargets
@@ -82,6 +83,13 @@ export async function startRepl(options: ReplOptions): Promise<void> {
 
   const history: HistoryEntry[] = []
 
+  /** ランタイム設定（/set で変更可能） */
+  const settings = {
+    language: options.language,
+    maxIterations: options.maxIterations,
+    outputPath: undefined as string | undefined,
+  }
+
   printReplBanner()
 
   const prompt = (): void => {
@@ -98,8 +106,9 @@ export async function startRepl(options: ReplOptions): Promise<void> {
           const engine = new LoopEngine(
             {
               task: command.payload,
-              language: options.language,
-              maxIterations: options.maxIterations,
+              language: settings.language,
+              outputPath: settings.outputPath,
+              maxIterations: settings.maxIterations,
               timeoutMs: options.timeoutMs,
               pollIntervalMs: options.pollIntervalMs,
               onAskUser: (context) => askUserDecision(rl, context),
@@ -186,6 +195,38 @@ export async function startRepl(options: ReplOptions): Promise<void> {
         case 'last': {
           const lastEntry = history.length > 0 ? history[history.length - 1] : null
           printReplLastResult(lastEntry)
+          prompt()
+          break
+        }
+
+        case 'set': {
+          if (command.payload === null) {
+            // 現在の設定を表示
+            console.log(`  language: ${settings.language ?? '(未設定)'}`)
+            console.log(`  max-iterations: ${settings.maxIterations}`)
+            console.log(`  output: ${settings.outputPath ?? '(未設定)'}`)
+          } else {
+            const validation = validateSetCommand(command.payload.key, command.payload.value)
+            if (!validation.ok) {
+              printError(validation.error.message)
+            } else {
+              const { key, value } = validation.value
+              switch (key) {
+                case 'language':
+                  settings.language = value
+                  console.log(`language を ${value} に設定しました`)
+                  break
+                case 'max-iterations':
+                  settings.maxIterations = parseInt(value, 10)
+                  console.log(`max-iterations を ${value} に設定しました`)
+                  break
+                case 'output':
+                  settings.outputPath = value
+                  console.log(`output を ${value} に設定しました`)
+                  break
+              }
+            }
+          }
           prompt()
           break
         }
