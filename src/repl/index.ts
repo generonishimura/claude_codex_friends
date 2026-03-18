@@ -140,11 +140,12 @@ export async function startRepl(options: ReplOptions): Promise<void> {
             })
           } else {
             printError(result.error.message)
+            const state = engine.getState()
             history.push({
               task: command.payload,
               approved: false,
-              iterations: 0,
-              finalCode: null,
+              iterations: state.iteration,
+              finalCode: state.currentCode,
               userAccepted: false,
             })
           }
