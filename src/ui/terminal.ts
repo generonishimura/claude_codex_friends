@@ -82,6 +82,10 @@ ${COLORS.cyan}ループ制御（ループ一時停止中に使用）:${COLORS.re
   ${COLORS.bold}/accept${COLORS.reset}            現在のコードをそのまま承認して終了
   ${COLORS.bold}/reject${COLORS.reset}            コードを破棄して終了
 
+${COLORS.cyan}設定:${COLORS.reset}
+  ${COLORS.bold}/set${COLORS.reset}                現在の設定を表示
+  ${COLORS.bold}/set <key> <value>${COLORS.reset}  設定を変更 (language, max-iterations, output)
+
 ${COLORS.cyan}情報・管理:${COLORS.reset}
   ${COLORS.bold}/save [path]${COLORS.reset}       前回の結果をファイルに保存
   ${COLORS.bold}/status${COLORS.reset}            両ペインの現在状態を表示
