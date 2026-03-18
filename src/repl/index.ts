@@ -195,7 +195,7 @@ export async function startRepl(options: ReplOptions): Promise<void> {
 
         case 'last': {
           const lastEntry = history.length > 0 ? history[history.length - 1] : null
-          printReplLastResult(lastEntry)
+          printReplLastResult(lastEntry, command.payload === 'full')
           prompt()
           break
         }

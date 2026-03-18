@@ -9,7 +9,7 @@ export type ReplCommand =
   | { type: 'save'; payload: string | undefined }
   | { type: 'status' }
   | { type: 'history' }
-  | { type: 'last' }
+  | { type: 'last'; payload: 'full' | undefined }
   | { type: 'set'; payload: { key: string; value: string } | null }
   | { type: 'help' }
   | { type: 'exit' }
