@@ -4,7 +4,7 @@ import { runAgentLoop } from './orchestrator/agent-loop.js'
 import { launchThreePane } from './launcher.js'
 import { startRepl } from './repl/index.js'
 import { waitForCompletion, destroySession, cleanupTempFiles } from './services/tmux.service.js'
-import { printError } from './ui/terminal.js'
+import { printError, printProgress } from './ui/terminal.js'
 
 /** リソースをクリーンアップする */
 async function cleanup(sessionName: string, keepSession: boolean): Promise<void> {
@@ -50,19 +50,21 @@ async function main(): Promise<void> {
       const claudeTarget = `${sessionName}:0.1`
       const codexTarget = `${sessionName}:0.2`
 
-      console.log('Claude CLI の起動を待機中...')
+      const claudeWait = printProgress('Claude CLI の起動を待機中')
       const claudeReady = await waitForCompletion(
         claudeTarget, mode.timeoutMs, mode.pollIntervalMs, '', DEFAULTS.cliStartupDelayMs,
       )
+      claudeWait.stop(claudeReady.ok)
       if (!claudeReady.ok) {
         printError(`Claude CLI の起動に失敗: ${claudeReady.error.message}`)
         process.exit(1)
       }
 
-      console.log('Codex CLI の起動を待機中...')
+      const codexWait = printProgress('Codex CLI の起動を待機中')
       const codexReady = await waitForCompletion(
         codexTarget, mode.timeoutMs, mode.pollIntervalMs, '', DEFAULTS.cliStartupDelayMs, true,
       )
+      codexWait.stop(codexReady.ok)
       if (!codexReady.ok) {
         printError(`Codex CLI の起動に失敗: ${codexReady.error.message}`)
         process.exit(1)

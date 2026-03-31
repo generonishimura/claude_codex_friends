@@ -19,6 +19,16 @@ export async function checkTmuxAvailable(): Promise<Result<void>> {
   }
 }
 
+/** 指定されたCLIコマンドがPATH上に存在するか確認する */
+export async function checkCliAvailable(cli: string): Promise<Result<void>> {
+  try {
+    await execFileAsync('which', [cli])
+    return ok(undefined)
+  } catch {
+    return err(ERRORS.CLI_NOT_FOUND(cli))
+  }
+}
+
 /** tmux セッションを作成する（2ペイン構成） */
 export async function createSession(sessionName: string): Promise<Result<void>> {
   const result = await tmux('new-session', '-d', '-s', sessionName, '-x', '200', '-y', '50')

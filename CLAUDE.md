@@ -46,7 +46,7 @@ src/
 │   ├── tmux.service.ts  # barrel re-export（後方互換）
 │   ├── tmux-core.ts     # tmux(), sleep()
 │   ├── tmux-pane.service.ts    # sendPrompt, capturePane, waitForCompletion
-│   ├── tmux-session.service.ts # createSession, destroySession, startClaude/Codex
+│   ├── tmux-session.service.ts # createSession, destroySession, checkCliAvailable, startClaude/Codex
 │   └── file.service.ts  # saveCodeToTempFile, cleanupTempFiles
 ├── orchestrator/        # ループ実行エンジン
 │   ├── agent-loop.ts    # 自動ループ実行（セッション管理含む）
@@ -58,7 +58,7 @@ src/
 ├── config/
 │   └── index.ts         # parseMode(), DEFAULTS
 ├── ui/
-│   └── terminal.ts      # ターミナル出力・色付き表示
+│   └── terminal.ts      # ターミナル出力・色付き表示・プログレス表示
 ├── launcher.ts          # 3ペイン tmux 起動
 └── index.ts             # エントリーポイント
 ```
@@ -66,10 +66,11 @@ src/
 ### 処理フロー
 
 #### ランチャーモード（デフォルト: `ccf`）
-1. 3ペイン tmux セッション作成（上=REPL, 下左=Claude, 下右=Codex）
-2. 各ペインで Claude/Codex CLI を起動
-3. REPL ペインで `--repl` モードを自己呼び出し
-4. tmux セッションにアタッチ
+1. 事前チェック（tmux, claude, codex の存在確認）
+2. 3ペイン tmux セッション作成（上=REPL, 下左=Claude, 下右=Codex）
+3. 各ペインで Claude/Codex CLI を起動（プログレス表示付き）
+4. REPL ペインで `--repl` モードを自己呼び出し
+5. tmux セッションにアタッチ
 
 #### REPL モード（`ccf --repl`）
 1. CLI起動完了を待機（ポーリング）
@@ -79,10 +80,11 @@ src/
 
 #### 自動モード（`ccf "タスク"`）
 1. CLI引数パース → `LoopConfig` 生成
-2. tmux セッション作成（2ペイン: 左=Claude, 右=Codex）
-3. 両CLIの起動完了を待機
-4. LoopEngine でループ実行（APPROVED or 最大イテレーション到達まで）
-5. 結果出力、`--keep-session` でセッション残存
+2. 事前チェック（tmux, claude, codex の存在確認）
+3. tmux セッション作成（2ペイン: 左=Claude, 右=Codex）
+4. 両CLIの起動完了を待機（プログレス表示付き）
+5. LoopEngine でループ実行（APPROVED or 最大イテレーション到達まで）
+6. 結果出力、`--keep-session` でセッション残存
 
 ### 設計上の重要ポイント
 
@@ -90,6 +92,7 @@ src/
 - **Result 型によるエラーハンドリング**: ドメイン層では例外を投げず `ok()`/`err()` で返す
 - **CLI応答検知**: tmux の `capture-pane` でペイン出力を取得し、完了プロンプト（`❯`, `›`）のパターンマッチ + 出力安定性（2回連続同一）で応答完了を判定
 - **長文プロンプト対策**: TUI のバッファ制限回避のため 200文字チャンクに分割送信
+- **事前依存チェック**: tmux / claude / codex の存在を起動前に確認し、不足時は修正方法を案内
 
 ## テスト
 
